@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Androp — Offline P2P Share</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#e0e0e0">
+<style>
+  /* ==== Neumorphism Theme ==== */
+  body {
+    margin:0;
+    font-family: Inter, system-ui, sans-serif;
+    background:#e0e0e0;
+    color:#333;
+    text-align:center;
+  }
+  header {
+    padding:20px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:10px;
+  }
+  header img {
+    width:48px;height:48px;border-radius:12px;
+    box-shadow: 6px 6px 12px #bebebe, -6px -6px 12px #ffffff;
+  }
+  h1 {margin:0;font-size:22px;}
+  .muted {color:#666;font-size:13px;}
+  .wrap {max-width:900px;margin:0 auto;padding:20px;}
+
+  .card {
+    background:#e0e0e0;
+    border-radius:20px;
+    box-shadow:8px 8px 16px #bebebe,-8px -8px 16px #ffffff;
+    padding:18px;
+    margin:15px 0;
+    text-align:left;
+  }
+  input,textarea,button {
+    width:100%;padding:10px;margin:6px 0;
+    border:none;outline:none;
+    border-radius:12px;
+    background:#e0e0e0;
+    box-shadow: inset 4px 4px 8px #bebebe, inset -4px -4px 8px #ffffff;
+    font-size:14px;
+  }
+  button {
+    cursor:pointer;
+    box-shadow:4px 4px 8px #bebebe,-4px -4px 8px #ffffff;
+  }
+  button:active {
+    box-shadow:inset 4px 4px 8px #bebebe,inset -4px -4px 8px #ffffff;
+  }
+
+  #qr {display:flex;justify-content:center;margin:12px 0;}
+  #chatLog {height:180px;overflow:auto;padding:8px;
+    background:#e0e0e0;border-radius:12px;
+    box-shadow: inset 4px 4px 8px #bebebe,inset -4px -4px 8px #ffffff;}
+  #fileList {margin-top:8px;font-size:13px;}
+
+  /* ==== Pulse animation (on connect) ==== */
+  .pulse {
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:200px;height:200px;border-radius:50%;
+    background:rgba(0,200,255,0.3);
+    animation:pulseAnim 1.5s ease-out infinite;
+    pointer-events:none;z-index:100;
+  }
+  @keyframes pulseAnim {
+    0%{transform:translate(-50%,-50%) scale(0.5);opacity:0.8;}
+    100%{transform:translate(-50%,-50%) scale(2);opacity:0;}
+  }
+
+  /* ==== Radar ==== */
+  #radarCanvas {
+    width:300px;height:300px;background:#e0e0e0;
+    border-radius:50%;margin:20px auto;
+    box-shadow: inset 8px 8px 16px #bebebe,inset -8px -8px 16px #ffffff;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <img src="https://i.ibb.co/h1XB0F9D/Chat-GPT-Image-Sep-16-2025-10-29-13-PM.png" alt="logo">
+    <div>
+      <h1>Androp</h1>
+      <div class="muted">P2P Share with Neumorphism UI</div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="card">
+      <label>Your name</label>
+      <input id="myName" placeholder="Alice">
+      <button id="createOfferBtn">Create Offer</button>
+      <button id="createAnswerBtn">Act as Answerer</button>
+      <div id="qr"></div>
+      <textarea id="sdpText" rows="5" placeholder="Offer/Answer JSON here"></textarea>
+      <button id="pasteRemoteBtn">Apply Remote</button>
+      <div class="muted">Status: <span id="connStatus">idle</span></div>
+    </div>
+
+    <div class="card">
+      <label>Chat</label>
+      <div id="chatLog"></div>
+      <input id="chatInput" placeholder="Type message">
+      <button id="sendMsg">Send</button>
+      <label>Send File</label>
+      <input id="fileInput" type="file" multiple>
+      <div id="fileList"></div>
+    </div>
+
+    <div class="card">
+      <h3>Radar</h3>
+      <canvas id="radarCanvas" width="300" height="300"></canvas>
+      <div class="muted">Connected + history devices</div>
+    </div>
+  </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+/* ========= Service worker ========= */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
+
+/* ========= WebRTC basic P2P ========= */
+const pcConfig={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
+let pc=null,dc=null;
+const myName=document.getElementById('myName');
+const connStatus=document.getElementById('connStatus');
+const chatLog=document.getElementById('chatLog');
+const chatInput=document.getElementById('chatInput');
+const sendMsg=document.getElementById('sendMsg');
+const fileInput=document.getElementById('fileInput');
+const fileList=document.getElementById('fileList');
+const sdpText=document.getElementById('sdpText');
+const qrDiv=document.getElementById('qr');
+
+function updateStatus(s){connStatus.textContent=s;}
+
+/* Pulse animation when connected */
+function showPulse(){
+  const p=document.createElement('div');p.className='pulse';document.body.appendChild(p);
+  setTimeout(()=>p.remove(),1500);
+}
+
+/* Radar: draw sweep + devices */
+const radar=document.getElementById('radarCanvas');
+const ctx=radar.getContext('2d');
+let angle=0;
+let devices=JSON.parse(localStorage.getItem('devices')||'[]');
+
+function drawRadar(){
+  ctx.clearRect(0,0,300,300);
+  ctx.save();
+  ctx.translate(150,150);
+  // circles
+  ctx.strokeStyle='#bbb';
+  for(let r=60;r<=150;r+=30){ctx.beginPath();ctx.arc(0,0,r,0,2*Math.PI);ctx.stroke();}
+  // sweep
+  ctx.fillStyle='rgba(0,200,255,0.2)';
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.arc(0,0,150,angle,angle+0.2);
+  ctx.closePath();ctx.fill();
+  // dots
+  devices.forEach((d,i)=>{
+    ctx.fillStyle=d.connected?'#0af':'#888';
+    ctx.beginPath();
+    ctx.arc(d.x,d.y,6,0,2*Math.PI);
+    ctx.fill();
+  });
+  ctx.restore();
+  angle+=0.03;
+  requestAnimationFrame(drawRadar);
+}
+drawRadar();
+
+/* Add device to radar/history */
+function addDevice(name){
+  const anglePos=Math.random()*2*Math.PI;
+  const r=80+Math.random()*60;
+  const x=Math.cos(anglePos)*r;
+  const y=Math.sin(anglePos)*r;
+  devices.push({name,x,y,connected:true});
+  localStorage.setItem('devices',JSON.stringify(devices));
+}
+
+/* Setup WebRTC */
+function createPeer(asOffer=true){
+  pc=new RTCPeerConnection(pcConfig);
+  pc.oniceconnectionstatechange=()=>updateStatus(pc.iceConnectionState);
+  if(asOffer){
+    dc=pc.createDataChannel('androp');
+    setupDC(dc);
+  }else{
+    pc.ondatachannel=e=>{dc=e.channel;setupDC(dc);}
+  }
+  return pc;
+}
+function setupDC(ch){
+  ch.onopen=()=>{updateStatus('connected');logChat('Connected','system');showPulse();addDevice(myName.value||'anon');};
+  ch.onmessage=e=>{logChat(e.data,'peer');};
+}
+function logChat(msg,who){const d=document.createElement('div');d.textContent=(who?who+': ':'')+msg;chatLog.appendChild(d);chatLog.scrollTop=chatLog.scrollHeight;}
+
+/* Offer */
+document.getElementById('createOfferBtn').onclick=async()=>{
+  createPeer(true);
+  const offer=await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await new Promise(r=>setTimeout(r,1000));
+  const payload={type:'offer',sdp:pc.localDescription.sdp};
+  sdpText.value=JSON.stringify(payload);
+  qrDiv.innerHTML='';new QRCode(qrDiv,{text:sdpText.value,width:180,height:180});
+};
+/* Answer */
+document.getElementById('createAnswerBtn').onclick=async()=>{
+  let obj;try{obj=JSON.parse(sdpText.value);}catch(e){alert('Invalid offer');return;}
+  createPeer(false);
+  await pc.setRemoteDescription(new RTCSessionDescription({type:'offer',sdp:obj.sdp}));
+  const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
+  await new Promise(r=>setTimeout(r,1000));
+  const payload={type:'answer',sdp:pc.localDescription.sdp};
+  sdpText.value=JSON.stringify(payload);
+  qrDiv.innerHTML='';new QRCode(qrDiv,{text:sdpText.value,width:180,height:180});
+};
+/* Apply remote */
+document.getElementById('pasteRemoteBtn').onclick=async()=>{
+  let obj;try{obj=JSON.parse(sdpText.value);}catch(e){alert('Invalid');return;}
+  await pc.setRemoteDescription(new RTCSessionDescription({type:obj.type,sdp:obj.sdp}));
+};
+
+/* Chat send */
+sendMsg.onclick=()=>{if(dc&&dc.readyState==='open'){dc.send(chatInput.value);logChat(chatInput.value,'me');chatInput.value='';}};
+</script>
+</body>
+</html>
