@@ -2,624 +2,728 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Androp — P2P Share</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Androp — Offline P2P File Share</title>
 
-<!-- Apple-like font fallback -->
+<!-- Minimal CSS: liquid glass dashboard look -->
 <style>
-  :root{
-    --glass-bg: rgba(255,255,255,0.06);
-    --accent: #00e6c3;
-    --muted: rgba(255,255,255,0.7);
-    --glass-border: rgba(255,255,255,0.08);
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial;color:#fff;background:
-    radial-gradient(1200px 600px at 10% 10%, rgba(0,200,150,0.05), transparent 10%),
-    linear-gradient(180deg,#071426 0%, #0b1220 100%);
-    -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
-  }
-  .app {
-    min-height:100vh;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:18px;
-  }
+:root{
+  --bg:#0f1724;
+  --glass:#0b1220aa;
+  --accent:#00c2ff;
+  --accent-2:#7b61ff;
+  --muted:#98a0ad;
+  --card:#0b1220cc;
+  --glass-blur:10px;
+  --radius:16px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,system-ui,-apple-system,Arial;background:linear-gradient(180deg,#071026 0%, #0f1724 100%);color:#eaf2ff}
+.app{
+  max-width:920px;margin:18px auto;padding:22px;
+  display:grid;gap:18px;
+  grid-template-columns: 340px 1fr;
+  align-items:start;
+}
 
-  .card {
-    width:100%;
-    max-width:420px;
-    border-radius:18px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(10px) saturate(120%);
-    -webkit-backdrop-filter: blur(10px) saturate(120%);
-    border: 1px solid var(--glass-border);
-    box-shadow: 0 8px 30px rgba(2,6,23,0.6);
-    padding:18px;
-  }
+/* left column - profile & controls */
+.panel{
+  background:rgba(255,255,255,0.03);backdrop-filter:blur(var(--glass-blur));
+  border-radius:var(--radius);padding:18px;border:1px solid rgba(255,255,255,0.04);
+  box-shadow: 0 8px 30px rgba(7,12,20,0.6);
+}
+.header{display:flex;gap:12px;align-items:center}
+.logo{
+  width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#032032;
+  box-shadow: 0 6px 18px rgba(11,18,32,0.5);
+}
+.title{font-size:20px;font-weight:600}
+.subtitle{font-size:12px;color:var(--muted);margin-top:-4px}
 
-  .top {
-    display:flex;
-    gap:12px;
-    align-items:center;
-  }
-  .logo {
-    width:64px;height:64px;border-radius:14px;object-fit:cover;border:1px solid rgba(255,255,255,0.06);
-    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
-  }
-  h1{font-size:20px;margin:0}
-  p.muted{margin:4px 0 8px;color:var(--muted);font-size:13px}
+/* profile card */
+.profile-card{margin-top:14px;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);display:flex;gap:12px;align-items:center}
+.profile-emoji{font-size:36px;width:66px;height:66px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent)}
+.profile-name{font-weight:700;font-size:16px}
 
-  .profile {
-    display:flex;gap:8px;align-items:center;margin-top:12px;
-  }
-  .emoji {
-    width:56px;height:56px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);
-    display:flex;align-items:center;justify-content:center;font-size:28px;background:rgba(255,255,255,0.02);
-  }
-  input[type="text"],select{
-    flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);
-    background:transparent;color:inherit;font-size:15px;
-  }
+/* settings */
+.form-row{margin-top:12px;display:flex;gap:10px;align-items:center}
+.input{flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+.btn{padding:10px 12px;border-radius:10px;border:none;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#022133;font-weight:600;cursor:pointer}
+.btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+.small{font-size:12px;color:var(--muted);margin-top:8px}
 
-  .btn {
-    display:block;width:100%;padding:14px;border-radius:14px;border:none;background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-    color:#fff;font-size:16px;cursor:pointer;margin-top:12px;box-shadow:0 8px 20px rgba(2,6,23,0.6);
-  }
-  .btn:active{transform:scale(0.99)}
+/* right column - dashboard */
+.dashboard{grid-column:2/3;padding:18px;border-radius:16px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.03)}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.big{font-size:20px;font-weight:700}
+.status-bubble{padding:8px 12px;border-radius:999px;background:rgba(0,200,255,0.08);color:var(--accent);font-weight:600;border:1px solid rgba(0,200,255,0.06)}
 
-  .tiny {font-size:13px;color:var(--muted);margin-top:8px}
+/* connect area */
+.connect-card{margin-top:12px;padding:14px;border-radius:12px;background:linear-gradient(90deg, rgba(255,255,255,0.015), transparent)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.qr-wrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.qr-canvas{width:180px;height:180px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.04)}
+.sdp-area{width:100%;height:120px;padding:10px;border-radius:10px;background:rgba(0,0,0,0.25);border:1px dashed rgba(255,255,255,0.03);color:var(--muted);font-family:monospace;overflow:auto}
 
-  /* modal overlay */
-  .overlay {
-    position:fixed;inset:0;background:rgba(2,6,23,0.5);display:flex;align-items:center;justify-content:center;
-    z-index:1200;padding:18px;
-  }
-  .dialog {
-    width:100%;max-width:420px;border-radius:16px;padding:14px;background:var(--glass-bg);
-    border:1px solid var(--glass-border);backdrop-filter:blur(8px);
-  }
-  .row{display:flex;gap:8px}
-  .small {padding:10px;border-radius:10px;border:none;flex:1;cursor:pointer;background:rgba(255,255,255,0.03);}
+/* file card */
+.file-card{margin-top:12px;padding:14px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.015), transparent);display:flex;gap:12px;align-items:center;justify-content:space-between}
+.file-info{flex:1;text-align:left}
+.file-name{font-weight:700}
+.progress{height:12px;background:rgba(255,255,255,0.03);border-radius:999px;overflow:hidden}
+.progress-bar{height:100%;width:0%;background:linear-gradient(90deg,#00c2ff,#7b61ff);transition:width 180ms linear}
 
-  /* camera preview */
-  #cameraPreview{width:100%;height:320px;background:#000;border-radius:10px;object-fit:cover;}
+/* receive list */
+.rec-list{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.rec-item{padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);display:flex;justify-content:space-between;align-items:center}
+.link{color:var(--accent);text-decoration:none;font-weight:700}
 
-  /* qr box */
-  #qrBox{display:flex;justify-content:center;padding:12px}
+/* connected animation - liquid glass ripple */
+.connected-glow{
+  position:relative;
+  overflow:hidden;
+  border-radius:12px;
+}
+.connected-glow::after{
+  content:"";position:absolute;inset:-40%;background:radial-gradient(circle at 30% 20%, rgba(0,194,255,0.08), transparent 7%),
+  radial-gradient(circle at 80% 70%, rgba(123,97,255,0.06), transparent 15%);opacity:0;transform:scale(0.95);
+  transition:opacity 400ms ease, transform 700ms cubic-bezier(.2,.9,.2,1);
+}
+.connected .connected-glow::after{opacity:1;transform:scale(1)}
+.pulse{
+  position:relative;border-radius:999px;padding:8px 12px;
+  box-shadow: 0 6px 18px rgba(11,18,32,0.6), 0 0 0 rgba(0,194,255,0.15);
+  animation: pulse 2.6s infinite;
+}
+@keyframes pulse{0%{box-shadow:0 6px 18px rgba(11,18,32,0.6),0 0 0 rgba(0,194,255,0.15)}50%{box-shadow:0 10px 40px rgba(11,18,32,0.5),0 0 60px rgba(0,194,255,0.06)}100%{box-shadow:0 6px 18px rgba(11,18,32,0.6),0 0 0 rgba(0,194,255,0.15)}}
 
-  /* chat area */
-  .chat {
-    margin-top:12px;border-radius:12px;padding:10px;background:rgba(0,0,0,0.08);max-height:220px;overflow:auto;
-  }
-  .chat .me{color:var(--accent);font-weight:600}
-  .chat .peer{color:#fff}
-
-  /* file list */
-  .files {margin-top:8px;display:flex;flex-direction:column;gap:8px}
-  .fileItem{background:rgba(255,255,255,0.02);padding:10px;border-radius:10px;font-size:14px}
-
-  /* ripple */
-  .ripple {
-    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:80px;height:80px;border-radius:50%;pointer-events:none;
-    background:radial-gradient(circle, rgba(0,230,180,0.3), transparent 60%);z-index:1400;animation:rippleAnim 900ms ease-out;
-  }
-  @keyframes rippleAnim{
-    from{transform:translate(-50%,-50%) scale(0.5);opacity:0.9}
-    to{transform:translate(-50%,-50%) scale(4);opacity:0}
-  }
-
-  /* history */
-  .history{margin-top:12px;display:flex;flex-direction:column;gap:8px}
-  .histItem{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;background:rgba(255,255,255,0.02)}
-  .histEmoji{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px}
-
-  /* responsive */
-  @media (max-width:420px){ .card{padding:14px} }
+/* responsive */
+@media (max-width:880px){
+  .app{grid-template-columns:1fr; padding:12px}
+}
 </style>
 
-<!-- QR generator and jsQR (for scanning) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.min.js"></script>
+<!-- QR & QR-scanner libraries (CDN). If you expect strict offline after initial load, download these libs and inline them. -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
 </head>
 <body>
-<div class="app">
-  <div class="card" role="main" aria-labelledby="title">
-    <div class="top">
-      <img class="logo" src="https://i.ibb.co/h1XB0F9D/Chat-GPT-Image-Sep-16-2025-10-29-13-PM.png" alt="Androp logo">
+<div class="app" id="appRoot">
+
+  <!-- left: profile & controls -->
+  <div class="panel">
+    <div class="header">
+      <div class="logo">A</div>
       <div>
-        <h1 id="title">Androp</h1>
-        <p class="muted">Quickly connect & share — tap Connect</p>
+        <div class="title">Androp</div>
+        <div class="subtitle">Offline P2P file transfer — QR & copy fallback</div>
       </div>
     </div>
 
-    <div class="profile">
-      <div class="emoji" id="emojiPreview">🙂</div>
-      <input id="nameInput" type="text" placeholder="Your name (e.g. Alice)">
-      <input id="emojiInput" type="text" maxlength="2" style="width:60px;text-align:center" aria-label="emoji">
+    <div class="profile-card" style="margin-top:14px">
+      <div class="profile-emoji" id="profileEmoji">😀</div>
+      <div>
+        <div class="profile-name" id="profileName">Anonymous</div>
+        <div class="small" id="profileId">Device ID: —</div>
+      </div>
     </div>
 
-    <button class="btn" id="connectBtn">Connect device</button>
+    <div style="margin-top:12px">
+      <div class="small">Profile</div>
+      <div class="form-row" style="margin-top:8px">
+        <select id="presetEmoji" class="input"></select>
+      </div>
+      <div class="form-row">
+        <input id="nameInput" class="input" placeholder="Your display name">
+      </div>
+      <div class="form-row">
+        <button class="btn" id="saveProfileBtn">Save profile</button>
+        <button class="btn secondary" id="randomNameBtn">Randomize name</button>
+      </div>
+      <div class="small">Saved locally (localStorage & cookie)</div>
+    </div>
 
-    <div class="tiny">Quick history</div>
-    <div class="history" id="historyList"></div>
+    <hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,0.03)">
 
-    <div class="tiny">Chat & files</div>
-    <div class="chat" id="chatLog"></div>
+    <div>
+      <div class="small">Connect</div>
+      <div class="form-row">
+        <button class="btn" id="createOfferBtn">Create Offer (Host)</button>
+        <button class="btn secondary" id="scanQrBtn">Scan QR (Join)</button>
+      </div>
 
-    <div class="files" id="fileList"></div>
+      <div class="form-row" style="margin-top:10px">
+        <button class="btn" id="showLocalSdpBtn">Show my Offer (QR / Copy)</button>
+        <button class="btn secondary" id="showRemoteSdpBtn">Paste/Use remote SDP</button>
+      </div>
+      <div class="small">If QR fails, use copy/paste. Works on same hotspot / LAN.</div>
+    </div>
+
+    <hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,0.03)">
+
+    <div>
+      <div class="small">App info</div>
+      <div class="small" style="margin-top:8px">App: <b>Androp</b> · Offline P2P · WebRTC DataChannel</div>
+      <div class="small" style="margin-top:6px">Host on GitHub Pages — page only serves UI, transfers are direct local P2P.</div>
+    </div>
 
   </div>
-</div>
 
-<!-- Modals (hidden by default) -->
-<div id="connectModal" class="overlay" style="display:none">
-  <div class="dialog">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <strong>Connect</strong>
-      <button id="closeConnect" style="background:none;border:none;color:var(--muted);cursor:pointer">✕</button>
+  <!-- right: dashboard -->
+  <div class="dashboard" id="dashboard">
+
+    <div class="top-row">
+      <div>
+        <div class="big">Send & Receive</div>
+        <div class="small">Pick a file and share directly with another nearby device</div>
+      </div>
+      <div id="connectedBadge" class="status-bubble">Not connected</div>
     </div>
-    <p class="tiny">Choose how to connect</p>
-    <div class="row" style="margin-top:8px">
-      <button class="small" id="hostRole">Host (scan)</button>
-      <button class="small" id="recvRole">Receiver (show QR)</button>
+
+    <div class="connect-card connected-glow" id="connectCard" style="margin-top:12px">
+      <div class="small">Quick join — scan the host QR or click create offer</div>
+      <div class="qr-wrap" style="margin-top:12px">
+        <div class="qr-canvas" id="qrCanvas">QR</div>
+        <div style="flex:1">
+          <div class="small">Local SDP / QR (paste to remote if needed)</div>
+          <div id="localSdp" class="sdp-area" contenteditable="false"></div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button class="btn" id="copyLocalBtn">Copy</button>
+            <button class="btn secondary" id="downloadLocalBtn">Download Offer</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px">
+        <div class="small">Remote SDP / Answer (paste remote here)</div>
+        <textarea id="remoteSdpInput" class="sdp-area" placeholder="Paste remote SDP/answer here"></textarea>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button class="btn" id="useRemoteBtn">Use Remote SDP</button>
+          <button class="btn secondary" id="clearRemoteBtn">Clear</button>
+        </div>
+      </div>
     </div>
+
+    <div class="file-card" id="fileCard">
+      <div class="file-info">
+        <div class="file-name" id="pickedName">No file selected</div>
+        <div class="small" id="pickedSize">—</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+        <input type="file" id="fileInput" style="display:none">
+        <button class="btn" id="selectFileBtn">Select file</button>
+        <button class="btn secondary" id="sendFileBtn" disabled>Send</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <div class="small">Sending progress</div>
+      <div class="progress" style="margin-top:6px">
+        <div class="progress-bar" id="sendBar"></div>
+      </div>
+      <div class="small" id="sendStatus">Idle</div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="small">Received files</div>
+      <div class="rec-list" id="recList"></div>
+    </div>
+
+    <!-- camera preview for QR scanning -->
+    <div id="cameraPreview" style="margin-top:14px;display:none">
+      <div class="small">Camera (scan QR)</div>
+      <video id="camVideo" width="320" height="240" autoplay playsinline style="border-radius:10px;margin-top:8px"></video>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <button class="btn" id="stopScanBtn">Stop Scan</button>
+      </div>
+    </div>
+
+    <div style="margin-top:18px" id="logArea" class="small">Logs: <span id="logs">Ready</span></div>
+
   </div>
+
 </div>
 
-<div id="cameraModal" class="overlay" style="display:none">
-  <div class="dialog">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <strong>Scan QR</strong>
-      <button id="closeCamera" style="background:none;border:none;color:var(--muted);cursor:pointer">✕</button>
-    </div>
-    <video id="cameraPreview" autoplay playsinline></video>
-    <p class="tiny">Point camera at the partner's QR</p>
-  </div>
-</div>
+<!-- Main JS (single-file app) -->
+<script>
+/*
+  Androp — Offline P2P file share with QR offer/answer and copy fallback
+  - Uses WebRTC DataChannel (ordered, reliable)
+  - Chunked transfer (64KB) with backpressure
+  - QR generator for offer; QR scanner via device camera (jsQR)
+  - Profile saved to localStorage & cookie
+  - UI: liquid glass dashboard
+*/
 
-<div id="qrModal" class="overlay" style="display:none">
-  <div class="dialog">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <strong>Your QR</strong>
-      <button id="closeQR" style="background:none;border:none;color:var(--muted);cursor:pointer">✕</button>
-    </div>
-    <div id="qrBox"></div>
-    <p class="tiny">Have the other device scan this QR</p>
-  </div>
-</div>
+// --- Utilities ---
+const logEl = text => { const e=document.getElementById('logs'); e.textContent = text + ' — ' + new Date().toLocaleTimeString(); }
+const uuid = () => 'd'+Math.random().toString(36).slice(2,9);
+const setCookie = (k,v,d=365)=>{const dt=new Date();dt.setTime(dt.getTime()+d*24*60*60*1000);document.cookie=\`\${k}=\${encodeURIComponent(v)};expires=\${dt.toUTCString()};path=/\`;}
+const getCookie = k => { const m=document.cookie.match(new RegExp('(^| )'+k+'=([^;]+)'));return m?decodeURIComponent(m[2]):null; }
 
-<!-- firebase module + app logic -->
-<script type="module">
-/* ---------------------------
-  Firebase imports and init
-   (you provided the firebaseConfig; using it as-is)
-   Make sure RTDB rules allow these paths or enable auth.
-----------------------------*/
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getDatabase, ref, set, push, onChildAdded, onValue, remove, off, update, get, child } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCCAdWENmFuXfruVUywVHlQi4NJdbwRwSw",
-  authDomain: "drop-48e1c.firebaseapp.com",
-  projectId: "drop-48e1c",
-  storageBucket: "drop-48e1c.firebasestorage.app",
-  messagingSenderId: "1038653970015",
-  appId: "1:1038653970015:web:4ecb0891a794c40758edea",
-  measurementId: "G-MEF6129M9T"
-};
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-// Realtime DB base path used here
-// e.g., rooms/<roomId> will hold offer/answer/candidates and profiles
-
-/* ---------------------------
-  UI references
-----------------------------*/
+// --- Profile & UI init ---
+const PRESET_EMOJIS = ["😀","😎","🚀","📁","🤝","📤","📥","🔗","🛰️","✨","🔥","🌊","🍀","🎯","🛸"];
+const presetSelect = document.getElementById('presetEmoji');
+PRESET_EMOJIS.forEach(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;presetSelect.appendChild(o)});
 const nameInput = document.getElementById('nameInput');
-const emojiInput = document.getElementById('emojiInput');
-const emojiPreview = document.getElementById('emojiPreview');
-const connectBtn = document.getElementById('connectBtn');
-const connectModal = document.getElementById('connectModal');
-const hostRole = document.getElementById('hostRole');
-const recvRole = document.getElementById('recvRole');
-const closeConnect = document.getElementById('closeConnect');
+const profileEmojiEl = document.getElementById('profileEmoji');
+const profileNameEl = document.getElementById('profileName');
+const profileIdEl = document.getElementById('profileId');
 
-const cameraModal = document.getElementById('cameraModal');
-const cameraPreview = document.getElementById('cameraPreview');
-const closeCamera = document.getElementById('closeCamera');
-
-const qrModal = document.getElementById('qrModal');
-const qrBox = document.getElementById('qrBox');
-const closeQR = document.getElementById('closeQR');
-
-const chatLog = document.getElementById('chatLog');
-const fileList = document.getElementById('fileList');
-const historyList = document.getElementById('historyList');
-
-/* ---------------------------
-  Local user identity
-----------------------------*/
-let myUid = localStorage.getItem('androp_uid');
-if (!myUid) {
-  myUid = 'u_' + Math.random().toString(36).slice(2,10);
-  localStorage.setItem('androp_uid', myUid);
+let deviceId = null;
+function loadProfile(){
+  const savedName = localStorage.getItem('androp_name') || getCookie('androp_name') || ('User-'+Math.floor(Math.random()*9000+1000));
+  const savedEmoji = localStorage.getItem('androp_emoji') || getCookie('androp_emoji') || PRESET_EMOJIS[0];
+  const savedId = localStorage.getItem('androp_deviceid') || getCookie('androp_deviceid') || uuid();
+  deviceId = savedId;
+  nameInput.value = savedName;
+  presetSelect.value = savedEmoji;
+  profileEmojiEl.textContent = savedEmoji;
+  profileNameEl.textContent = savedName;
+  profileIdEl.textContent = 'Device ID: ' + deviceId;
 }
-nameInput.value = localStorage.getItem('androp_name') || '';
-emojiInput.value = localStorage.getItem('androp_emoji') || '🙂';
-emojiPreview.textContent = emojiInput.value;
-
-/* save profile on change */
-nameInput.addEventListener('input', ()=>localStorage.setItem('androp_name', nameInput.value));
-emojiInput.addEventListener('input', ()=>{
-  localStorage.setItem('androp_emoji', emojiInput.value);
-  emojiPreview.textContent = emojiInput.value || '🙂';
-});
-
-/* ---------------------------
-  Small utilities
-----------------------------*/
-function el(tag, cls){ const d=document.createElement(tag); if(cls) d.className=cls; return d; }
-function show(elm){ elm.style.display='flex'; }
-function hide(elm){ elm.style.display='none'; }
-function ripple(){ const r=document.createElement('div'); r.className='ripple'; document.body.appendChild(r); setTimeout(()=>r.remove(),900); }
-
-/* chat logging */
-function log(text, who='peer'){ const d = el('div'); d.textContent = text; d.className = who==='me'? 'me': 'peer'; chatLog.appendChild(d); chatLog.scrollTop = chatLog.scrollHeight; }
-
-/* history UI */
-function renderHistory(){
-  const raw = JSON.parse(localStorage.getItem('androp_history') || '[]');
-  historyList.innerHTML = '';
-  raw.slice().reverse().forEach(h=>{
-    const item = el('div','histItem');
-    const em = el('div','histEmoji'); em.textContent = h.emoji || '🙂';
-    const name = el('div'); name.innerHTML = `<strong>${h.name}</strong><div class="tiny" style="color:var(--muted)">${new Date(h.t).toLocaleString()}</div>`;
-    item.appendChild(em); item.appendChild(name);
-    historyList.appendChild(item);
-  });
+function saveProfile(){
+  const name = nameInput.value.trim() || ('User-'+Math.floor(Math.random()*9000+1000));
+  const emoji = presetSelect.value || PRESET_EMOJIS[0];
+  localStorage.setItem('androp_name', name);
+  localStorage.setItem('androp_emoji', emoji);
+  localStorage.setItem('androp_deviceid', deviceId);
+  setCookie('androp_name', name, 365);
+  setCookie('androp_emoji', emoji, 365);
+  setCookie('androp_deviceid', deviceId, 365);
+  profileEmojiEl.textContent = emoji;
+  profileNameEl.textContent = name;
+  logEl('Profile saved');
 }
-function addHistory(obj){
-  const curr = JSON.parse(localStorage.getItem('androp_history') || '[]');
-  // keep unique by uid
-  const exists = curr.find(c=>c.uid === obj.uid);
-  if(!exists) curr.push(obj); else { exists.t = Date.now(); }
-  // limit to 30
-  if(curr.length>30) curr.splice(0,curr.length-30);
-  localStorage.setItem('androp_history', JSON.stringify(curr));
-  renderHistory();
-}
+document.getElementById('saveProfileBtn').addEventListener('click', saveProfile);
+document.getElementById('randomNameBtn').addEventListener('click', ()=>{ nameInput.value = ['Nova','Orbit','Atlas','Echo','Mako','Zephyr','Kai','Nyx','Vega','Blaze'][Math.floor(Math.random()*10)] + '-' + Math.floor(Math.random()*900+100); });
 
-/* initial render */
-renderHistory();
+loadProfile();
 
-/* ---------------------------
-  WebRTC & Signaling (RTDB)
-----------------------------*/
-const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
+// --- WebRTC & signaling (manual via QR or paste)
 let pc = null;
 let dc = null;
-let roomRef = null;
-let localCandidatesRef = null;
-let remoteCandidatesRef = null;
-let roomIdGlobal = null;
+let isOfferer = false;
+let localSdpText = '';
+let remoteSet = false;
+let fileToSend = null;
 
-/* create room (receiver): make offer, write offer + profile, show QR with roomId */
-async function createRoomAndShowQR(){
-  // create room id short
-  const roomId = Math.random().toString(36).slice(2,9);
-  roomIdGlobal = roomId;
-  pc = new RTCPeerConnection(configuration);
+// DOM refs
+const createOfferBtn = document.getElementById('createOfferBtn');
+const scanQrBtn = document.getElementById('scanQrBtn');
+const showLocalSdpBtn = document.getElementById('showLocalSdpBtn');
+const showRemoteSdpBtn = document.getElementById('showRemoteSdpBtn');
+const localSdpDiv = document.getElementById('localSdp');
+const remoteSdpInput = document.getElementById('remoteSdpInput');
+const copyLocalBtn = document.getElementById('copyLocalBtn');
+const downloadLocalBtn = document.getElementById('downloadLocalBtn');
+const useRemoteBtn = document.getElementById('useRemoteBtn');
+const clearRemoteBtn = document.getElementById('clearRemoteBtn');
+const qrCanvas = document.getElementById('qrCanvas');
+const camVideo = document.getElementById('camVideo');
+const cameraPreview = document.getElementById('cameraPreview');
+const stopScanBtn = document.getElementById('stopScanBtn');
 
-  // data channel for file/chat (receiver may accept channel via ondatachannel)
-  pc.ondatachannel = (e)=>{
-    dc = e.channel;
-    setupDataChannel(dc);
-  };
+const selectFileBtn = document.getElementById('selectFileBtn');
+const sendFileBtn = document.getElementById('sendFileBtn');
+const fileInput = document.getElementById('fileInput');
+const pickedName = document.getElementById('pickedName');
+const pickedSize = document.getElementById('pickedSize');
+const sendBar = document.getElementById('sendBar');
+const sendStatus = document.getElementById('sendStatus');
+const recList = document.getElementById('recList');
+const connectedBadge = document.getElementById('connectedBadge');
 
-  // collect local candidates and write them to RTDB under rooms/<roomId>/calleeCandidates
-  localCandidatesRef = ref(db, `rooms/${roomId}/calleeCandidates`);
-  remoteCandidatesRef = ref(db, `rooms/${roomId}/callerCandidates`);
-  pc.onicecandidate = (event) => {
-    if(event.candidate){
-      const cRef = push(localCandidatesRef);
-      set(cRef, event.candidate.toJSON());
-    }
-  };
+createOfferBtn.onclick = async () => {
+  isOfferer = true;
+  await preparePeer(true);
+  logEl('Offer created — show QR or copy to remote');
+  // localSdpDiv filled by onicecandidate final
+};
 
-  // create offer
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-
-  // wait briefly for ICE to gather (simple approach)
-  await new Promise(res => setTimeout(res, 1500));
-
-  // write offer + profile to RTDB
-  const roomRefBase = ref(db, `rooms/${roomId}`);
-  const profile = { uid: myUid, name: nameInput.value || 'anon', emoji: emojiInput.value || '🙂', t: Date.now() };
-  await set(roomRefBase, { offer: pc.localDescription.toJSON(), receiverProfile: profile });
-
-  // listen for answer
-  onValue(ref(db, `rooms/${roomId}/answer`), async snapshot=>{
-    const ans = snapshot.val();
-    if(ans && ans.sdp){
-      const remoteDesc = { type: ans.type || 'answer', sdp: ans.sdp };
-      await pc.setRemoteDescription(remoteDesc);
-      ripple(); // connected animation (will also trigger datachannel onopen)
-      // once connected, attach candidate listeners
-      // listen for caller candidates (host side)
-      onChildAdded(remoteCandidatesRef, snapshot=>{
-        const c = snapshot.val();
-        if(c) pc.addIceCandidate(c).catch(()=>{});
-      });
-    }
-  });
-
-  // show QR (contain roomId and receiver's profile)
-  const payload = { roomId, profile };
-  qrBox.innerHTML = '';
-  new QRCode(qrBox, { text: JSON.stringify(payload), width: 220, height: 220 });
-  show(qrModal);
-}
-
-/* Host: open camera, scan QR, fetch offer from DB, then create answer and write it */
-let camStream = null;
-let scanning = false;
-
-async function startCameraAndScan(){
-  try{
-    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-    cameraPreview.srcObject = camStream;
-    show(cameraModal);
-    scanning = true;
-    const video = cameraPreview;
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-
-    async function frameLoop(){
-      if(!scanning) return;
-      if(video.videoWidth === 0 || video.videoHeight === 0){ requestAnimationFrame(frameLoop); return; }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video,0,0,canvas.width,canvas.height);
-      const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
-      if(code && code.data){
-        // found QR payload
-        scanning = false;
-        stopCamera();
-        hide(cameraModal);
-        ripple();
-        try{
-          const payload = JSON.parse(code.data);
-          await handleScannedPayload(payload);
-        }catch(e){
-          alert('Scanned QR invalid');
-        }
-        return;
-      }
-      requestAnimationFrame(frameLoop);
-    }
-    requestAnimationFrame(frameLoop);
-  }catch(err){
-    console.error('camera err',err);
-    alert('Camera access denied or not available');
+showLocalSdpBtn.onclick = () => {
+  if(localSdpText) {
+    renderLocalSDP(localSdpText);
+  } else {
+    alert('Create offer first (host) or wait until local SDP appears.');
   }
-}
+};
 
-function stopCamera(){
+copyLocalBtn.onclick = async () => {
+  if(!localSdpText) return alert('No SDP to copy. Create offer first.');
+  try{
+    await navigator.clipboard.writeText(localSdpText);
+    logEl('Local SDP copied to clipboard');
+  }catch(e){ alert('Copy not allowed — please manually copy from the box'); }
+};
+downloadLocalBtn.onclick = () => {
+  if(!localSdpText) return alert('No SDP available');
+  const blob = new Blob([localSdpText], {type:'application/sdp+json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='androp-offer.sdp'; a.click(); URL.revokeObjectURL(url);
+};
+
+showRemoteSdpBtn.onclick = () => {
+  remoteSdpInput.style.display = remoteSdpInput.style.display === 'none' ? 'block' : 'block';
+  remoteSdpInput.focus();
+};
+
+useRemoteBtn.onclick = async () => {
+  const txt = remoteSdpInput.value.trim();
+  if(!txt) return alert('Paste the remote SDP/answer text here.');
+  try{
+    const obj = JSON.parse(txt);
+    await setRemoteSDP(obj);
+    remoteSdpInput.value = '';
+    logEl('Remote SDP used');
+  }catch(e){
+    alert('Invalid SDP JSON. Use exact offer/answer JSON.');
+  }
+};
+clearRemoteBtn.onclick = ()=>{ remoteSdpInput.value = ''; }
+
+// start camera & scanning
+let scanning = false;
+let camStream = null;
+scanQrBtn.onclick = async () => {
+  try{
+    await startScanner();
+  }catch(e){
+    alert('Camera not available. Use copy/paste fallback.');
+  }
+};
+stopScanBtn.onclick = stopScanner;
+
+async function startScanner(){
+  cameraPreview.style.display = 'block';
+  camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+  camVideo.srcObject = camStream;
+  camVideo.play();
+  scanning = true;
+  logEl('Camera started. Point at host QR.');
+  scanLoop();
+}
+function stopScanner(){
+  scanning = false;
+  cameraPreview.style.display = 'none';
   if(camStream){
     camStream.getTracks().forEach(t=>t.stop());
     camStream = null;
   }
-  scanning = false;
 }
 
-/* When host scans payload {roomId, profile}, join the room by fetching offer and writing answer/candidates */
-async function handleScannedPayload(payload){
-  if(!payload || !payload.roomId) return alert('Invalid QR payload');
-  const roomId = payload.roomId;
-  roomIdGlobal = roomId;
-
-  // read offer from DB
-  const roomRefBase = ref(db, `rooms/${roomId}`);
-  const snap = await get(child(ref(db), `rooms/${roomId}`));
-  const roomObj = snap.exists()? snap.val() : null;
-  if(!roomObj || !roomObj.offer){
-    return alert('Offer not found in DB — make sure the receiver created QR and wrote the offer.');
+async function scanLoop(){
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  while(scanning){
+    try{
+      canvas.width = camVideo.videoWidth;
+      canvas.height = camVideo.videoHeight;
+      ctx.drawImage(camVideo,0,0,canvas.width,canvas.height);
+      const img = ctx.getImageData(0,0,canvas.width,canvas.height);
+      const code = jsQR(img.data, img.width, img.height, {inversionAttempts:'attemptBoth'});
+      if(code){
+        scanning = false;
+        stopScanner();
+        logEl('QR scanned — parsing SDP');
+        await handleScannedText(code.data);
+        break;
+      }
+    }catch(e){}
+    await new Promise(r=>setTimeout(r,200));
   }
+}
 
-  // create peer connection and data channel (host creates datachannel)
-  pc = new RTCPeerConnection(configuration);
-  dc = pc.createDataChannel('andropData');
-  setupDataChannel(dc);
-
-  // candidate refs
-  localCandidatesRef = ref(db, `rooms/${roomId}/callerCandidates`);
-  remoteCandidatesRef = ref(db, `rooms/${roomId}/calleeCandidates`);
-  pc.onicecandidate = (event)=>{
-    if(event.candidate){
-      const cRef = push(localCandidatesRef);
-      set(cRef, event.candidate.toJSON());
-    }
-  };
-
-  // set remote offer
-  const offer = roomObj.offer;
-  await pc.setRemoteDescription({ type: offer.type || 'offer', sdp: offer.sdp });
-
-  // create answer
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-
-  // write answer to DB
-  await set(ref(db, `rooms/${roomId}/answer`), pc.localDescription.toJSON());
-
-  // listen for calleeCandidates (receiver side candidates)
-  onChildAdded(remoteCandidatesRef, snapshot=>{
-    const c = snapshot.val();
-    if(c) pc.addIceCandidate(c).catch(()=>{});
-  });
-
-  // update that host connected to receiver: add to history locally
-  const receiverProfile = payload.profile || { name:'unknown', emoji:'🙂' };
-  addHistory({ uid: receiverProfile.uid || ('r_'+roomId), name: receiverProfile.name, emoji: receiverProfile.emoji, t: Date.now() });
-
-  // also write connection summary to DB under connections/<myUid> and connections/<peerUid>
+// Called when user scans QR or pastes text
+async function handleScannedText(text){
+  // try to decompress if compressed
+  let s = text;
   try{
-    const myProfile = { uid: myUid, name: nameInput.value || 'anon', emoji: emojiInput.value || '🙂', t: Date.now() };
-    await push(ref(db, `connections/${myUid}`), { peer: receiverProfile, at: Date.now(), roomId });
-    await push(ref(db, `connections/${receiverProfile.uid||('r_'+roomId)}`), { peer: myProfile, at: Date.now(), roomId });
-  }catch(e){ console.warn('write conn err', e); }
+    // if data looks like base64url (we encoded earlier), decode
+    if(s.startsWith('SDP:')) s = s.slice(4);
+    // if looks like base64 -> decode
+    if(/^[A-Za-z0-9+/=]+$/.test(s) && s.length>100) {
+      // base64 -> utf8
+      const str = atob(s);
+      // maybe gzipped? we did not gzip here; assume plain JSON
+      s = str;
+    }
+  }catch(e){}
+  // now s hopefully JSON
+  try{
+    const obj = JSON.parse(s);
+    // If it's an offer and we're joining, create answer flow
+    if(obj.type === 'offer'){
+      logEl('Offer received via QR. Creating answer...');
+      await preparePeer(false); // answerer
+      await setRemoteSDP(obj);
+      // create answer
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      // wait until ICE gather completes (onicecandidate null will fill localSdp)
+      logEl('Answer created. Show QR for the answer to send back to host.');
+      // when ice gather done, localSdpText will be set and QR generated
+    } else if(obj.type === 'answer'){
+      // if we're offerer, set remote answer
+      if(isOfferer){
+        await setRemoteSDP(obj);
+        logEl('Answer applied — connection should establish soon.');
+      } else {
+        logEl('Unexpected answer while not offerer.');
+      }
+    } else {
+      logEl('Got SDP JSON (unknown type).');
+    }
+  }catch(e){
+    alert('Scanned QR is not recognized or too large. Use copy/paste fallback (Show my Offer / Paste remote).');
+  }
 }
 
-/* Setup DataChannel handlers for chat + file transfer */
-let fileReceiver = null;
-function setupDataChannel(channel){
-  channel.onopen = ()=>{ logSystem('connected'); ripple(); };
-  channel.onclose = ()=>{ logSystem('disconnected'); ripple(); };
-  channel.onerror = (e)=>console.warn('dc err',e);
-  channel.onmessage = (evt)=>{
-    if(typeof evt.data === 'string'){
+// Create peer connection and a datachannel if offerer
+async function preparePeer(makeOffer){
+  cleanupPeer();
+  pc = new RTCPeerConnection({
+    iceServers: []
+  });
+  pc.oniceconnectionstatechange = ()=>{ updateConnectionState(pc.iceConnectionState); }
+  pc.onconnectionstatechange = ()=>{ updateConnectionState(pc.connectionState); }
+
+  pc.onicecandidate = (ev) => {
+    if(ev.candidate) return; // wait until gathering complete
+    // when gathering done, localDescription is final
+    if(pc && pc.localDescription){
+      localSdpText = JSON.stringify(pc.localDescription);
+      renderLocalSDP(localSdpText);
+    }
+  };
+
+  pc.ondatachannel = ev => {
+    dc = ev.channel;
+    setupDataChannelHandlers();
+    logEl('DataChannel received (remote).');
+  };
+
+  if(makeOffer){
+    isOfferer = true;
+    // create reliable ordered channel
+    dc = pc.createDataChannel('androp-file', {ordered:true});
+    setupDataChannelHandlers();
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    // after ICE gather, onicecandidate null will fill localSdpText
+    logEl('Offer created; waiting ICE gather then show QR/copy.');
+  } else {
+    isOfferer = false;
+    logEl('Prepared as answerer — waiting for remote offer');
+  }
+}
+
+// apply remote SDP (offer/answer)
+async function setRemoteSDP(obj){
+  if(!pc) await preparePeer(false);
+  await pc.setRemoteDescription(obj);
+  logEl('Remote SDP set.');
+}
+
+// render local SDP and try to generate QR; fallback to text area if too big
+function renderLocalSDP(sdpText){
+  localSdpDiv.textContent = sdpText;
+  // try to base64-encode (shorter for QR-friendly) and create QR
+  try{
+    const b64 = btoa(sdpText);
+    // some SDPs can be too big for QR; try create and see if canvas image size is reasonable
+    QRCode.toCanvas(document.createElement('canvas'), 'SDP:'+b64, {width:180, margin:1}, function(err,canvas){
+      if(err){
+        // fallback: put text into the box and do not show QR
+        qrCanvas.innerHTML = '<div style="padding:8px;color:var(--muted)">QR too large — use copy/paste</div>';
+      } else {
+        // draw canvas into qrCanvas
+        qrCanvas.innerHTML = '';
+        canvas.style.maxWidth = '100%';
+        canvas.style.height = 'auto';
+        qrCanvas.appendChild(canvas);
+        // also put base64 in localSdpDiv for copy fallback
+        localSdpDiv.textContent = JSON.stringify({type:JSON.parse(sdpText).type, base64: b64});
+      }
+    });
+  }catch(e){
+    // too large or failure — show text
+    qrCanvas.innerHTML = '<div style="padding:8px;color:var(--muted)">QR not available — use copy/paste</div>';
+  }
+}
+
+// set up data channel handlers
+let receiveBuffer = [];
+let receivedSize = 0;
+let incomingMeta = null;
+function setupDataChannelHandlers(){
+  dc.onopen = ()=>{ onConnected(); logEl('DataChannel open'); };
+  dc.onclose = ()=>{ onDisconnected(); logEl('DataChannel closed'); };
+  dc.onerror = (e)=>{ logEl('DataChannel error: '+e); };
+  dc.onmessage = async (ev) => {
+    // we send a JSON meta string first with {type:'meta', name, size, mime}
+    if(typeof ev.data === 'string'){
       try{
-        const obj = JSON.parse(evt.data);
-        if(obj.type === 'chat'){ logPeer(obj.text); }
-        else if(obj.type === 'file-meta'){ // incoming file meta
-          fileReceiver = { name: obj.name, size: obj.size, chunks: [], received: 0 };
-          logSystem('incoming file: ' + obj.name);
-        } else if(obj.type === 'file-end'){
-          // assemble
-          const blob = new Blob(fileReceiver.chunks);
-          const url = URL.createObjectURL(blob);
-          addReceivedFile(fileReceiver.name, url);
-          fileReceiver = null;
+        const obj = JSON.parse(ev.data);
+        if(obj.type === 'meta'){
+          incomingMeta = obj;
+          receiveBuffer = [];
+          receivedSize = 0;
+          logEl('Receiving: ' + obj.name + ' (' + formatBytes(obj.size) + ')');
+          return;
         }
-      }catch(e){
-        // not json plain string
-        logPeer(evt.data);
-      }
-    } else if (evt.data instanceof ArrayBuffer){
-      if(fileReceiver){
-        fileReceiver.chunks.push(evt.data);
-        fileReceiver.received += evt.data.byteLength;
+        if(obj.type === 'done'){ // end marker with filename
+          if(incomingMeta){
+            const blob = new Blob(receiveBuffer, {type: incomingMeta.mime || 'application/octet-stream'});
+            offerReceivedFile(blob, incomingMeta);
+            incomingMeta = null;
+            receiveBuffer = [];
+            receivedSize = 0;
+          }
+          return;
+        }
+      }catch(e){}
+    } else {
+      // binary chunk
+      receiveBuffer.push(ev.data);
+      receivedSize += ev.data.byteLength;
+      if(incomingMeta){
+        const pct = Math.round(receivedSize / incomingMeta.size * 100);
+        updateReceiveProgress(pct, receivedSize, incomingMeta.size);
+        if(receivedSize >= incomingMeta.size){
+          // rely on 'done' string or just finalize
+          const blob = new Blob(receiveBuffer, {type: incomingMeta.mime || 'application/octet-stream'});
+          offerReceivedFile(blob, incomingMeta);
+          incomingMeta = null;
+          receiveBuffer = [];
+          receivedSize = 0;
+        }
       }
     }
   };
 }
 
-/* chat helpers */
-function logSystem(txt){ const d=el('div'); d.textContent = txt; d.style.opacity=0.8; d.style.fontSize='13px'; chatLog.appendChild(d); chatLog.scrollTop = chatLog.scrollHeight; }
-function logPeer(txt){ const d=el('div'); d.textContent = txt; d.className='peer'; chatLog.appendChild(d); chatLog.scrollTop = chatLog.scrollHeight; }
-function logMe(txt){ const d=el('div'); d.textContent = txt; d.className='me'; chatLog.appendChild(d); chatLog.scrollTop = chatLog.scrollHeight; }
+function updateReceiveProgress(pct, recv, total){
+  // show small UI update
+  connectedBadge.textContent = `Receiving — ${pct}%`;
+  sendStatus.textContent = `Receiving ${formatBytes(recv)} / ${formatBytes(total)}`
+}
 
-/* UI events wiring */
-connectBtn.addEventListener('click', ()=> show(connectModal));
-closeConnect.addEventListener('click', ()=> hide(connectModal));
+// when receive completes
+function offerReceivedFile(blob, meta){
+  const url = URL.createObjectURL(blob);
+  const item = document.createElement('div');
+  item.className = 'rec-item';
+  const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:700">${meta.name}</div><div class="small">${formatBytes(meta.size)}</div>`;
+  const right = document.createElement('div');
+  const a = document.createElement('a'); a.href = url; a.download = meta.name; a.textContent = 'Download'; a.className='link';
+  right.appendChild(a);
+  item.appendChild(left); item.appendChild(right);
+  recList.prepend(item);
+  connectedBadge.textContent = 'Connected';
+  sendStatus.textContent = 'Idle';
+  logEl('File received: '+meta.name);
+}
 
-hostRole.addEventListener('click', async ()=>{
-  hide(connectModal);
-  // open camera to scan remote QR
-  await startCameraAndScan();
-});
+// UI connected/disconnected
+function onConnected(){
+  document.body.classList.add('connected');
+  connectedBadge.textContent = 'Connected';
+  document.getElementById('connectCard').classList.add('connected');
+  document.getElementById('connectCard').classList.add('connected-glow');
+  sendFileBtn.disabled = !fileToSend;
+}
+function onDisconnected(){
+  document.body.classList.remove('connected');
+  connectedBadge.textContent = 'Not connected';
+  document.getElementById('connectCard').classList.remove('connected');
+  sendFileBtn.disabled = true;
+}
 
-recvRole.addEventListener('click', async ()=>{
-  hide(connectModal);
-  // create room and show QR with roomId + profile
-  await createRoomAndShowQR();
-  // push local history record (so receiver sees it locally)
-  addHistory({ uid: myUid, name: nameInput.value||'anon', emoji: emojiInput.value||'🙂', t: Date.now() });
-});
+// helper
+function formatBytes(bytes){ if(bytes===0) return '0 B'; const sizes=['B','KB','MB','GB','TB']; const i=Math.floor(Math.log(bytes)/Math.log(1024)); return (bytes/Math.pow(1024,i)).toFixed(i===0?0:2) + ' ' + sizes[i]; }
 
-closeCamera.addEventListener('click', ()=>{
-  stopCamera();
-  hide(cameraModal);
-});
+// file selection
+selectFileBtn.onclick = () => fileInput.click();
+fileInput.onchange = (e) => {
+  if(e.target.files.length===0) return;
+  fileToSend = e.target.files[0];
+  pickedName.textContent = fileToSend.name;
+  pickedSize.textContent = formatBytes(fileToSend.size);
+  sendFileBtn.disabled = !dc || dc.readyState !== 'open';
+};
 
-closeQR.addEventListener('click', ()=>{ hide(qrModal); /* optional: cleanup listeners if needed */ });
-
-/* file sending UI via Web Share sheet or file picker (simple) */
-fileList.addEventListener('click', ()=>{}); // placeholder for future
-
-/* quick chat input via double-tap on card (simple) */
-document.querySelector('.card').addEventListener('dblclick', async ()=>{
-  const txt = prompt('Send quick message:');
-  if(!txt || !dc || dc.readyState !== 'open') return alert('Not connected');
-  dc.send(JSON.stringify({ type:'chat', text: txt }));
-  logMe(txt);
-});
-
-/* Allow file sending via a simple file picker triggered by long press of connect button */
-connectBtn.addEventListener('contextmenu', (e)=>{ e.preventDefault(); pickAndSendFile(); });
-
-async function pickAndSendFile(){
-  if(!dc || dc.readyState !== 'open') return alert('No active connection');
-  const input = document.createElement('input'); input.type = 'file';
-  input.onchange = async ()=> {
-    const file = input.files[0];
-    if(!file) return;
-    // send meta first
-    dc.send(JSON.stringify({ type:'file-meta', name: file.name, size: file.size }));
-    // stream file in chunks
-    const chunkSize = 64*1024;
-    const reader = file.stream().getReader();
-    while(true){
-      const { done, value } = await reader.read();
-      if(done) break;
-      // value is Uint8Array
-      // send as ArrayBuffer
-      let offset = 0;
-      while(offset < value.byteLength){
-        const end = Math.min(offset + chunkSize, value.byteLength);
-        const slice = value.slice(offset, end);
-        dc.send(slice.buffer);
-        offset = end;
-        await new Promise(r=>setTimeout(r,10)); // yield occasionally
-      }
+// send file (chunked)
+sendFileBtn.onclick = async () => {
+  if(!dc || dc.readyState !== 'open') return alert('Not connected to peer yet.');
+  if(!fileToSend) return alert('Pick a file first.');
+  sendBar.style.width = '0%';
+  sendStatus.textContent = 'Starting send...';
+  const meta = {type:'meta', name: fileToSend.name, size: fileToSend.size, mime: fileToSend.type || ''};
+  dc.send(JSON.stringify(meta));
+  const CHUNK = 64 * 1024;
+  let offset = 0;
+  // set up backpressure limits
+  const BUFFERED_AMOUNT_HIGH = CHUNK * 16;
+  while(offset < fileToSend.size){
+    const slice = fileToSend.slice(offset, offset + CHUNK);
+    const ab = await slice.arrayBuffer();
+    // backpressure handling
+    if(dc.bufferedAmount > BUFFERED_AMOUNT_HIGH){
+      await waitForBufferedAmountLow(dc);
     }
-    // send end
-    dc.send(JSON.stringify({ type:'file-end' }));
-    logSystem('file sent: ' + file.name);
-  };
-  input.click();
-}
+    dc.send(ab);
+    offset += ab.byteLength;
+    const pct = Math.round(offset / fileToSend.size * 100);
+    sendBar.style.width = pct + '%';
+    sendStatus.textContent = `Sending ${formatBytes(offset)} / ${formatBytes(fileToSend.size)} (${pct}%)`;
+  }
+  dc.send(JSON.stringify({type:'done', name: fileToSend.name}));
+  sendStatus.textContent = 'Send complete';
+  logEl('Send complete: ' + fileToSend.name);
+};
 
-/* add received file UI */
-function addReceivedFile(name, url){
-  const item = el('div','fileItem');
-  item.innerHTML = `<strong>${name}</strong> — <a href="${url}" download="${name}" style="color:var(--accent)">Download</a>`;
-  fileList.appendChild(item);
-}
-
-/* helper el */
-function el(tag, cls){ const e=document.createElement(tag); if(cls) e.className = cls; return e; }
-
-/* cleanup on page unload */
-window.addEventListener('beforeunload', ()=> {
-  try{ if(roomIdGlobal) remove(ref(db, `rooms/${roomIdGlobal}`)); }catch(e){}
-});
-
-/* small helper: get (v12) */
-import { get as dbGet } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-
-/* optional: listen for incoming room answer/candidates if we created room earlier (receiver) */
-async function watchForAnswerCandidates(roomId){
-  // for receiver we already set listener for /rooms/<roomId>/answer in createRoomAndShowQR
-  // but we also watch for callerCandidates
-  remoteCandidatesRef = ref(db, `rooms/${roomId}/callerCandidates`);
-  onChildAdded(remoteCandidatesRef, snapshot=>{
-    const c = snapshot.val();
-    if(c && pc) pc.addIceCandidate(c).catch(()=>{});
+// wait for bufferedamountlow event
+function waitForBufferedAmountLow(channel){
+  return new Promise(resolve=>{
+    function handler(){ channel.removeEventListener('bufferedamountlow', handler); resolve(); }
+    channel.addEventListener('bufferedamountlow', handler);
+    // safety timeout
+    setTimeout(()=>{ try{ channel.removeEventListener('bufferedamountlow', handler); }catch(e){} resolve(); }, 1500);
   });
 }
 
-/* small polyfill for get(child(...)) usage earlier */
-import { getDatabase as _getDatabase } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+// cleanup
+function cleanupPeer(){
+  if(dc){ try{ dc.close(); }catch(e){} dc=null; }
+  if(pc){ try{ pc.close(); }catch(e){} pc=null; }
+  localSdpDiv.textContent = ''; qrCanvas.innerHTML = ''; localSdpText = '';
+  onDisconnected();
+}
 
-/* End of module */
+// update connection state badge
+function updateConnectionState(state){
+  connectedBadge.textContent = state;
+}
+
+// --- SDP paste fallback: user can paste offer/answer text into remoteSdpInput and click Use ---
+document.getElementById('createOfferBtn').addEventListener('click', ()=>{/* handled above */});
+document.getElementById('showLocalSdpBtn').addEventListener('click', ()=>{ if(localSdpText) renderLocalSDP(localSdpText); else alert('Create offer first') });
+
+// --- when localDescription available, onicecandidate handler sets localSdpText and renders QR ---
+// But sometimes ICE takes time; we rely on onicecandidate null event.
+
+// Save profile when page hidden/unload
+window.addEventListener('beforeunload', ()=> saveProfile() );
+window.addEventListener('visibilitychange', ()=> { if(document.visibilityState==='hidden') saveProfile(); });
+
+// Small enhancement: auto-create ephemeral offer if user opens on two tabs of same device
+(async function tryAutoOfferForLocalTesting(){
+  // If user opens two tabs, they could manually create offer. We won't auto-create to avoid confusion.
+})();
+
+logEl('Androp ready — load profile and use Create Offer or Scan QR.');
 </script>
-
 </body>
 </html>
