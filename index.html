@@ -1,729 +1,166 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Androp — Offline P2P File Share</title>
-
-<!-- Minimal CSS: liquid glass dashboard look -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Androp</title>
 <style>
-:root{
-  --bg:#0f1724;
-  --glass:#0b1220aa;
-  --accent:#00c2ff;
-  --accent-2:#7b61ff;
-  --muted:#98a0ad;
-  --card:#0b1220cc;
-  --glass-blur:10px;
-  --radius:16px;
-}
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,system-ui,-apple-system,Arial;background:linear-gradient(180deg,#071026 0%, #0f1724 100%);color:#eaf2ff}
-.app{
-  max-width:920px;margin:18px auto;padding:22px;
-  display:grid;gap:18px;
-  grid-template-columns: 340px 1fr;
-  align-items:start;
-}
-
-/* left column - profile & controls */
-.panel{
-  background:rgba(255,255,255,0.03);backdrop-filter:blur(var(--glass-blur));
-  border-radius:var(--radius);padding:18px;border:1px solid rgba(255,255,255,0.04);
-  box-shadow: 0 8px 30px rgba(7,12,20,0.6);
-}
-.header{display:flex;gap:12px;align-items:center}
-.logo{
-  width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));
-  display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#032032;
-  box-shadow: 0 6px 18px rgba(11,18,32,0.5);
-}
-.title{font-size:20px;font-weight:600}
-.subtitle{font-size:12px;color:var(--muted);margin-top:-4px}
-
-/* profile card */
-.profile-card{margin-top:14px;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);display:flex;gap:12px;align-items:center}
-.profile-emoji{font-size:36px;width:66px;height:66px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent)}
-.profile-name{font-weight:700;font-size:16px}
-
-/* settings */
-.form-row{margin-top:12px;display:flex;gap:10px;align-items:center}
-.input{flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
-.btn{padding:10px 12px;border-radius:10px;border:none;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#022133;font-weight:600;cursor:pointer}
-.btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
-.small{font-size:12px;color:var(--muted);margin-top:8px}
-
-/* right column - dashboard */
-.dashboard{grid-column:2/3;padding:18px;border-radius:16px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.03)}
-.top-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.big{font-size:20px;font-weight:700}
-.status-bubble{padding:8px 12px;border-radius:999px;background:rgba(0,200,255,0.08);color:var(--accent);font-weight:600;border:1px solid rgba(0,200,255,0.06)}
-
-/* connect area */
-.connect-card{margin-top:12px;padding:14px;border-radius:12px;background:linear-gradient(90deg, rgba(255,255,255,0.015), transparent)}
-.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-.qr-wrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.qr-canvas{width:180px;height:180px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.04)}
-.sdp-area{width:100%;height:120px;padding:10px;border-radius:10px;background:rgba(0,0,0,0.25);border:1px dashed rgba(255,255,255,0.03);color:var(--muted);font-family:monospace;overflow:auto}
-
-/* file card */
-.file-card{margin-top:12px;padding:14px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.015), transparent);display:flex;gap:12px;align-items:center;justify-content:space-between}
-.file-info{flex:1;text-align:left}
-.file-name{font-weight:700}
-.progress{height:12px;background:rgba(255,255,255,0.03);border-radius:999px;overflow:hidden}
-.progress-bar{height:100%;width:0%;background:linear-gradient(90deg,#00c2ff,#7b61ff);transition:width 180ms linear}
-
-/* receive list */
-.rec-list{margin-top:12px;display:flex;flex-direction:column;gap:8px}
-.rec-item{padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);display:flex;justify-content:space-between;align-items:center}
-.link{color:var(--accent);text-decoration:none;font-weight:700}
-
-/* connected animation - liquid glass ripple */
-.connected-glow{
-  position:relative;
-  overflow:hidden;
-  border-radius:12px;
-}
-.connected-glow::after{
-  content:"";position:absolute;inset:-40%;background:radial-gradient(circle at 30% 20%, rgba(0,194,255,0.08), transparent 7%),
-  radial-gradient(circle at 80% 70%, rgba(123,97,255,0.06), transparent 15%);opacity:0;transform:scale(0.95);
-  transition:opacity 400ms ease, transform 700ms cubic-bezier(.2,.9,.2,1);
-}
-.connected .connected-glow::after{opacity:1;transform:scale(1)}
-.pulse{
-  position:relative;border-radius:999px;padding:8px 12px;
-  box-shadow: 0 6px 18px rgba(11,18,32,0.6), 0 0 0 rgba(0,194,255,0.15);
-  animation: pulse 2.6s infinite;
-}
-@keyframes pulse{0%{box-shadow:0 6px 18px rgba(11,18,32,0.6),0 0 0 rgba(0,194,255,0.15)}50%{box-shadow:0 10px 40px rgba(11,18,32,0.5),0 0 60px rgba(0,194,255,0.06)}100%{box-shadow:0 6px 18px rgba(11,18,32,0.6),0 0 0 rgba(0,194,255,0.15)}}
-
-/* responsive */
-@media (max-width:880px){
-  .app{grid-template-columns:1fr; padding:12px}
-}
+  body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f2f2f2; }
+  header { padding:10px; background:#333; color:#fff; text-align:center; }
+  .container { max-width:600px; margin:auto; padding:10px; }
+  .section { background:#fff; padding:15px; margin:10px 0; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1);}
+  label { display:block; margin:10px 0 5px; }
+  input[type=text] { width:100%; padding:8px; box-sizing:border-box; }
+  select { padding:8px; width:100%; }
+  button { padding:10px 15px; margin-top:10px; cursor:pointer; }
+  #qr { text-align:center; margin:10px 0; }
+  #fileProgress { width:100%; }
+  #filesList { margin-top:10px; }
+  @media(max-width:600px){ .container{padding:5px;} }
 </style>
-
-<!-- QR & QR-scanner libraries (CDN). If you expect strict offline after initial load, download these libs and inline them. -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-
 </head>
 <body>
-<div class="app" id="appRoot">
 
-  <!-- left: profile & controls -->
-  <div class="panel">
-    <div class="header">
-      <div class="logo">A</div>
-      <div>
-        <div class="title">Androp</div>
-        <div class="subtitle">Offline P2P file transfer — QR & copy fallback</div>
-      </div>
-    </div>
+<header><h1>Androp</h1></header>
+<div class="container">
 
-    <div class="profile-card" style="margin-top:14px">
-      <div class="profile-emoji" id="profileEmoji">😀</div>
-      <div>
-        <div class="profile-name" id="profileName">Anonymous</div>
-        <div class="small" id="profileId">Device ID: —</div>
-      </div>
-    </div>
-
-    <div style="margin-top:12px">
-      <div class="small">Profile</div>
-      <div class="form-row" style="margin-top:8px">
-        <select id="presetEmoji" class="input"></select>
-      </div>
-      <div class="form-row">
-        <input id="nameInput" class="input" placeholder="Your display name">
-      </div>
-      <div class="form-row">
-        <button class="btn" id="saveProfileBtn">Save profile</button>
-        <button class="btn secondary" id="randomNameBtn">Randomize name</button>
-      </div>
-      <div class="small">Saved locally (localStorage & cookie)</div>
-    </div>
-
-    <hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,0.03)">
-
-    <div>
-      <div class="small">Connect</div>
-      <div class="form-row">
-        <button class="btn" id="createOfferBtn">Create Offer (Host)</button>
-        <button class="btn secondary" id="scanQrBtn">Scan QR (Join)</button>
-      </div>
-
-      <div class="form-row" style="margin-top:10px">
-        <button class="btn" id="showLocalSdpBtn">Show my Offer (QR / Copy)</button>
-        <button class="btn secondary" id="showRemoteSdpBtn">Paste/Use remote SDP</button>
-      </div>
-      <div class="small">If QR fails, use copy/paste. Works on same hotspot / LAN.</div>
-    </div>
-
-    <hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,0.03)">
-
-    <div>
-      <div class="small">App info</div>
-      <div class="small" style="margin-top:8px">App: <b>Androp</b> · Offline P2P · WebRTC DataChannel</div>
-      <div class="small" style="margin-top:6px">Host on GitHub Pages — page only serves UI, transfers are direct local P2P.</div>
-    </div>
-
+  <!-- Profile Section -->
+  <div class="section" id="profileSection">
+    <h2>Profile</h2>
+    <label>Name:</label>
+    <input type="text" id="userName">
+    <label>Emoji:</label>
+    <select id="userEmoji"></select>
+    <button id="saveProfile">Save Profile</button>
   </div>
 
-  <!-- right: dashboard -->
-  <div class="dashboard" id="dashboard">
+  <!-- Connection Section -->
+  <div class="section" id="connectionSection">
+    <h2>Connection</h2>
+    <button id="hostBtn">Host</button>
+    <div id="qr"></div>
+    <label>Or Join using Host ID:</label>
+    <input type="text" id="joinId" placeholder="Host Peer ID">
+    <button id="joinBtn">Join</button>
+    <p id="status"></p>
+  </div>
 
-    <div class="top-row">
-      <div>
-        <div class="big">Send & Receive</div>
-        <div class="small">Pick a file and share directly with another nearby device</div>
-      </div>
-      <div id="connectedBadge" class="status-bubble">Not connected</div>
-    </div>
-
-    <div class="connect-card connected-glow" id="connectCard" style="margin-top:12px">
-      <div class="small">Quick join — scan the host QR or click create offer</div>
-      <div class="qr-wrap" style="margin-top:12px">
-        <div class="qr-canvas" id="qrCanvas">QR</div>
-        <div style="flex:1">
-          <div class="small">Local SDP / QR (paste to remote if needed)</div>
-          <div id="localSdp" class="sdp-area" contenteditable="false"></div>
-          <div style="margin-top:8px;display:flex;gap:8px">
-            <button class="btn" id="copyLocalBtn">Copy</button>
-            <button class="btn secondary" id="downloadLocalBtn">Download Offer</button>
-          </div>
-        </div>
-      </div>
-
-      <div style="margin-top:14px">
-        <div class="small">Remote SDP / Answer (paste remote here)</div>
-        <textarea id="remoteSdpInput" class="sdp-area" placeholder="Paste remote SDP/answer here"></textarea>
-        <div style="margin-top:8px;display:flex;gap:8px">
-          <button class="btn" id="useRemoteBtn">Use Remote SDP</button>
-          <button class="btn secondary" id="clearRemoteBtn">Clear</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="file-card" id="fileCard">
-      <div class="file-info">
-        <div class="file-name" id="pickedName">No file selected</div>
-        <div class="small" id="pickedSize">—</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
-        <input type="file" id="fileInput" style="display:none">
-        <button class="btn" id="selectFileBtn">Select file</button>
-        <button class="btn secondary" id="sendFileBtn" disabled>Send</button>
-      </div>
-    </div>
-
-    <div style="margin-top:12px">
-      <div class="small">Sending progress</div>
-      <div class="progress" style="margin-top:6px">
-        <div class="progress-bar" id="sendBar"></div>
-      </div>
-      <div class="small" id="sendStatus">Idle</div>
-    </div>
-
-    <div style="margin-top:14px">
-      <div class="small">Received files</div>
-      <div class="rec-list" id="recList"></div>
-    </div>
-
-    <!-- camera preview for QR scanning -->
-    <div id="cameraPreview" style="margin-top:14px;display:none">
-      <div class="small">Camera (scan QR)</div>
-      <video id="camVideo" width="320" height="240" autoplay playsinline style="border-radius:10px;margin-top:8px"></video>
-      <div style="margin-top:8px;display:flex;gap:8px">
-        <button class="btn" id="stopScanBtn">Stop Scan</button>
-      </div>
-    </div>
-
-    <div style="margin-top:18px" id="logArea" class="small">Logs: <span id="logs">Ready</span></div>
-
+  <!-- File Transfer Section -->
+  <div class="section" id="transferSection" style="display:none;">
+    <h2>Send File</h2>
+    <input type="file" id="fileInput">
+    <button id="sendBtn">Send</button>
+    <progress id="fileProgress" value="0" max="100"></progress>
+    <div id="filesList"></div>
   </div>
 
 </div>
 
-<!-- Main JS (single-file app) -->
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <script>
-/*
-  Androp — Offline P2P file share with QR offer/answer and copy fallback
-  - Uses WebRTC DataChannel (ordered, reliable)
-  - Chunked transfer (64KB) with backpressure
-  - QR generator for offer; QR scanner via device camera (jsQR)
-  - Profile saved to localStorage & cookie
-  - UI: liquid glass dashboard
-*/
+  // ----------- Profile Management -----------
+  const emojis = ['😀','😎','🤖','🦄','🐱','🐶','🌟','🍕','⚡','💎'];
+  const emojiSelect = document.getElementById('userEmoji');
+  emojis.forEach(e=>{let o=document.createElement('option'); o.value=e; o.text=e; emojiSelect.appendChild(o);});
 
-// --- Utilities ---
-const logEl = text => { const e=document.getElementById('logs'); e.textContent = text + ' — ' + new Date().toLocaleTimeString(); }
-const uuid = () => 'd'+Math.random().toString(36).slice(2,9);
-const setCookie = (k,v,d=365)=>{const dt=new Date();dt.setTime(dt.getTime()+d*24*60*60*1000);document.cookie=\`\${k}=\${encodeURIComponent(v)};expires=\${dt.toUTCString()};path=/\`;}
-const getCookie = k => { const m=document.cookie.match(new RegExp('(^| )'+k+'=([^;]+)'));return m?decodeURIComponent(m[2]):null; }
+  const userNameInput = document.getElementById('userName');
+  const saveProfileBtn = document.getElementById('saveProfile');
 
-// --- Profile & UI init ---
-const PRESET_EMOJIS = ["😀","😎","🚀","📁","🤝","📤","📥","🔗","🛰️","✨","🔥","🌊","🍀","🎯","🛸"];
-const presetSelect = document.getElementById('presetEmoji');
-PRESET_EMOJIS.forEach(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;presetSelect.appendChild(o)});
-const nameInput = document.getElementById('nameInput');
-const profileEmojiEl = document.getElementById('profileEmoji');
-const profileNameEl = document.getElementById('profileName');
-const profileIdEl = document.getElementById('profileId');
+  // Load saved profile
+  if(localStorage.getItem('andropName')) userNameInput.value = localStorage.getItem('andropName');
+  if(localStorage.getItem('andropEmoji')) emojiSelect.value = localStorage.getItem('andropEmoji');
 
-let deviceId = null;
-function loadProfile(){
-  const savedName = localStorage.getItem('androp_name') || getCookie('androp_name') || ('User-'+Math.floor(Math.random()*9000+1000));
-  const savedEmoji = localStorage.getItem('androp_emoji') || getCookie('androp_emoji') || PRESET_EMOJIS[0];
-  const savedId = localStorage.getItem('androp_deviceid') || getCookie('androp_deviceid') || uuid();
-  deviceId = savedId;
-  nameInput.value = savedName;
-  presetSelect.value = savedEmoji;
-  profileEmojiEl.textContent = savedEmoji;
-  profileNameEl.textContent = savedName;
-  profileIdEl.textContent = 'Device ID: ' + deviceId;
-}
-function saveProfile(){
-  const name = nameInput.value.trim() || ('User-'+Math.floor(Math.random()*9000+1000));
-  const emoji = presetSelect.value || PRESET_EMOJIS[0];
-  localStorage.setItem('androp_name', name);
-  localStorage.setItem('androp_emoji', emoji);
-  localStorage.setItem('androp_deviceid', deviceId);
-  setCookie('androp_name', name, 365);
-  setCookie('androp_emoji', emoji, 365);
-  setCookie('androp_deviceid', deviceId, 365);
-  profileEmojiEl.textContent = emoji;
-  profileNameEl.textContent = name;
-  logEl('Profile saved');
-}
-document.getElementById('saveProfileBtn').addEventListener('click', saveProfile);
-document.getElementById('randomNameBtn').addEventListener('click', ()=>{ nameInput.value = ['Nova','Orbit','Atlas','Echo','Mako','Zephyr','Kai','Nyx','Vega','Blaze'][Math.floor(Math.random()*10)] + '-' + Math.floor(Math.random()*900+100); });
-
-loadProfile();
-
-// --- WebRTC & signaling (manual via QR or paste)
-let pc = null;
-let dc = null;
-let isOfferer = false;
-let localSdpText = '';
-let remoteSet = false;
-let fileToSend = null;
-
-// DOM refs
-const createOfferBtn = document.getElementById('createOfferBtn');
-const scanQrBtn = document.getElementById('scanQrBtn');
-const showLocalSdpBtn = document.getElementById('showLocalSdpBtn');
-const showRemoteSdpBtn = document.getElementById('showRemoteSdpBtn');
-const localSdpDiv = document.getElementById('localSdp');
-const remoteSdpInput = document.getElementById('remoteSdpInput');
-const copyLocalBtn = document.getElementById('copyLocalBtn');
-const downloadLocalBtn = document.getElementById('downloadLocalBtn');
-const useRemoteBtn = document.getElementById('useRemoteBtn');
-const clearRemoteBtn = document.getElementById('clearRemoteBtn');
-const qrCanvas = document.getElementById('qrCanvas');
-const camVideo = document.getElementById('camVideo');
-const cameraPreview = document.getElementById('cameraPreview');
-const stopScanBtn = document.getElementById('stopScanBtn');
-
-const selectFileBtn = document.getElementById('selectFileBtn');
-const sendFileBtn = document.getElementById('sendFileBtn');
-const fileInput = document.getElementById('fileInput');
-const pickedName = document.getElementById('pickedName');
-const pickedSize = document.getElementById('pickedSize');
-const sendBar = document.getElementById('sendBar');
-const sendStatus = document.getElementById('sendStatus');
-const recList = document.getElementById('recList');
-const connectedBadge = document.getElementById('connectedBadge');
-
-createOfferBtn.onclick = async () => {
-  isOfferer = true;
-  await preparePeer(true);
-  logEl('Offer created — show QR or copy to remote');
-  // localSdpDiv filled by onicecandidate final
-};
-
-showLocalSdpBtn.onclick = () => {
-  if(localSdpText) {
-    renderLocalSDP(localSdpText);
-  } else {
-    alert('Create offer first (host) or wait until local SDP appears.');
+  saveProfileBtn.onclick = () => {
+    localStorage.setItem('andropName', userNameInput.value||`User${Math.floor(Math.random()*1000)}`);
+    localStorage.setItem('andropEmoji', emojiSelect.value);
+    alert('Profile saved!');
   }
-};
 
-copyLocalBtn.onclick = async () => {
-  if(!localSdpText) return alert('No SDP to copy. Create offer first.');
-  try{
-    await navigator.clipboard.writeText(localSdpText);
-    logEl('Local SDP copied to clipboard');
-  }catch(e){ alert('Copy not allowed — please manually copy from the box'); }
-};
-downloadLocalBtn.onclick = () => {
-  if(!localSdpText) return alert('No SDP available');
-  const blob = new Blob([localSdpText], {type:'application/sdp+json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download='androp-offer.sdp'; a.click(); URL.revokeObjectURL(url);
-};
+  // ----------- PeerJS Setup -----------
+  let peer, conn, isHost=false;
 
-showRemoteSdpBtn.onclick = () => {
-  remoteSdpInput.style.display = remoteSdpInput.style.display === 'none' ? 'block' : 'block';
-  remoteSdpInput.focus();
-};
+  const hostBtn = document.getElementById('hostBtn');
+  const joinBtn = document.getElementById('joinBtn');
+  const joinIdInput = document.getElementById('joinId');
+  const qrDiv = document.getElementById('qr');
+  const statusP = document.getElementById('status');
+  const transferSection = document.getElementById('transferSection');
+  const fileInput = document.getElementById('fileInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const fileProgress = document.getElementById('fileProgress');
+  const filesList = document.getElementById('filesList');
 
-useRemoteBtn.onclick = async () => {
-  const txt = remoteSdpInput.value.trim();
-  if(!txt) return alert('Paste the remote SDP/answer text here.');
-  try{
-    const obj = JSON.parse(txt);
-    await setRemoteSDP(obj);
-    remoteSdpInput.value = '';
-    logEl('Remote SDP used');
-  }catch(e){
-    alert('Invalid SDP JSON. Use exact offer/answer JSON.');
-  }
-};
-clearRemoteBtn.onclick = ()=>{ remoteSdpInput.value = ''; }
-
-// start camera & scanning
-let scanning = false;
-let camStream = null;
-scanQrBtn.onclick = async () => {
-  try{
-    await startScanner();
-  }catch(e){
-    alert('Camera not available. Use copy/paste fallback.');
-  }
-};
-stopScanBtn.onclick = stopScanner;
-
-async function startScanner(){
-  cameraPreview.style.display = 'block';
-  camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-  camVideo.srcObject = camStream;
-  camVideo.play();
-  scanning = true;
-  logEl('Camera started. Point at host QR.');
-  scanLoop();
-}
-function stopScanner(){
-  scanning = false;
-  cameraPreview.style.display = 'none';
-  if(camStream){
-    camStream.getTracks().forEach(t=>t.stop());
-    camStream = null;
-  }
-}
-
-async function scanLoop(){
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  while(scanning){
-    try{
-      canvas.width = camVideo.videoWidth;
-      canvas.height = camVideo.videoHeight;
-      ctx.drawImage(camVideo,0,0,canvas.width,canvas.height);
-      const img = ctx.getImageData(0,0,canvas.width,canvas.height);
-      const code = jsQR(img.data, img.width, img.height, {inversionAttempts:'attemptBoth'});
-      if(code){
-        scanning = false;
-        stopScanner();
-        logEl('QR scanned — parsing SDP');
-        await handleScannedText(code.data);
-        break;
-      }
-    }catch(e){}
-    await new Promise(r=>setTimeout(r,200));
-  }
-}
-
-// Called when user scans QR or pastes text
-async function handleScannedText(text){
-  // try to decompress if compressed
-  let s = text;
-  try{
-    // if data looks like base64url (we encoded earlier), decode
-    if(s.startsWith('SDP:')) s = s.slice(4);
-    // if looks like base64 -> decode
-    if(/^[A-Za-z0-9+/=]+$/.test(s) && s.length>100) {
-      // base64 -> utf8
-      const str = atob(s);
-      // maybe gzipped? we did not gzip here; assume plain JSON
-      s = str;
-    }
-  }catch(e){}
-  // now s hopefully JSON
-  try{
-    const obj = JSON.parse(s);
-    // If it's an offer and we're joining, create answer flow
-    if(obj.type === 'offer'){
-      logEl('Offer received via QR. Creating answer...');
-      await preparePeer(false); // answerer
-      await setRemoteSDP(obj);
-      // create answer
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      // wait until ICE gather completes (onicecandidate null will fill localSdp)
-      logEl('Answer created. Show QR for the answer to send back to host.');
-      // when ice gather done, localSdpText will be set and QR generated
-    } else if(obj.type === 'answer'){
-      // if we're offerer, set remote answer
-      if(isOfferer){
-        await setRemoteSDP(obj);
-        logEl('Answer applied — connection should establish soon.');
-      } else {
-        logEl('Unexpected answer while not offerer.');
-      }
-    } else {
-      logEl('Got SDP JSON (unknown type).');
-    }
-  }catch(e){
-    alert('Scanned QR is not recognized or too large. Use copy/paste fallback (Show my Offer / Paste remote).');
-  }
-}
-
-// Create peer connection and a datachannel if offerer
-async function preparePeer(makeOffer){
-  cleanupPeer();
-  pc = new RTCPeerConnection({
-    iceServers: []
-  });
-  pc.oniceconnectionstatechange = ()=>{ updateConnectionState(pc.iceConnectionState); }
-  pc.onconnectionstatechange = ()=>{ updateConnectionState(pc.connectionState); }
-
-  pc.onicecandidate = (ev) => {
-    if(ev.candidate) return; // wait until gathering complete
-    // when gathering done, localDescription is final
-    if(pc && pc.localDescription){
-      localSdpText = JSON.stringify(pc.localDescription);
-      renderLocalSDP(localSdpText);
-    }
-  };
-
-  pc.ondatachannel = ev => {
-    dc = ev.channel;
-    setupDataChannelHandlers();
-    logEl('DataChannel received (remote).');
-  };
-
-  if(makeOffer){
-    isOfferer = true;
-    // create reliable ordered channel
-    dc = pc.createDataChannel('androp-file', {ordered:true});
-    setupDataChannelHandlers();
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    // after ICE gather, onicecandidate null will fill localSdpText
-    logEl('Offer created; waiting ICE gather then show QR/copy.');
-  } else {
-    isOfferer = false;
-    logEl('Prepared as answerer — waiting for remote offer');
-  }
-}
-
-// apply remote SDP (offer/answer)
-async function setRemoteSDP(obj){
-  if(!pc) await preparePeer(false);
-  await pc.setRemoteDescription(obj);
-  logEl('Remote SDP set.');
-}
-
-// render local SDP and try to generate QR; fallback to text area if too big
-function renderLocalSDP(sdpText){
-  localSdpDiv.textContent = sdpText;
-  // try to base64-encode (shorter for QR-friendly) and create QR
-  try{
-    const b64 = btoa(sdpText);
-    // some SDPs can be too big for QR; try create and see if canvas image size is reasonable
-    QRCode.toCanvas(document.createElement('canvas'), 'SDP:'+b64, {width:180, margin:1}, function(err,canvas){
-      if(err){
-        // fallback: put text into the box and do not show QR
-        qrCanvas.innerHTML = '<div style="padding:8px;color:var(--muted)">QR too large — use copy/paste</div>';
-      } else {
-        // draw canvas into qrCanvas
-        qrCanvas.innerHTML = '';
-        canvas.style.maxWidth = '100%';
-        canvas.style.height = 'auto';
-        qrCanvas.appendChild(canvas);
-        // also put base64 in localSdpDiv for copy fallback
-        localSdpDiv.textContent = JSON.stringify({type:JSON.parse(sdpText).type, base64: b64});
-      }
+  // Host
+  hostBtn.onclick = () => {
+    isHost=true;
+    peer = new Peer(undefined, {host:'peerjs.com', port:443, secure:true});
+    peer.on('open', id => {
+      statusP.innerText = `Your ID: ${id}`;
+      QRCode.toCanvas(qrDiv, id, {width:200});
     });
-  }catch(e){
-    // too large or failure — show text
-    qrCanvas.innerHTML = '<div style="padding:8px;color:var(--muted)">QR not available — use copy/paste</div>';
+    peer.on('connection', c => setupConnection(c));
   }
-}
 
-// set up data channel handlers
-let receiveBuffer = [];
-let receivedSize = 0;
-let incomingMeta = null;
-function setupDataChannelHandlers(){
-  dc.onopen = ()=>{ onConnected(); logEl('DataChannel open'); };
-  dc.onclose = ()=>{ onDisconnected(); logEl('DataChannel closed'); };
-  dc.onerror = (e)=>{ logEl('DataChannel error: '+e); };
-  dc.onmessage = async (ev) => {
-    // we send a JSON meta string first with {type:'meta', name, size, mime}
-    if(typeof ev.data === 'string'){
-      try{
-        const obj = JSON.parse(ev.data);
-        if(obj.type === 'meta'){
-          incomingMeta = obj;
-          receiveBuffer = [];
-          receivedSize = 0;
-          logEl('Receiving: ' + obj.name + ' (' + formatBytes(obj.size) + ')');
-          return;
-        }
-        if(obj.type === 'done'){ // end marker with filename
-          if(incomingMeta){
-            const blob = new Blob(receiveBuffer, {type: incomingMeta.mime || 'application/octet-stream'});
-            offerReceivedFile(blob, incomingMeta);
-            incomingMeta = null;
-            receiveBuffer = [];
-            receivedSize = 0;
-          }
-          return;
-        }
-      }catch(e){}
-    } else {
-      // binary chunk
-      receiveBuffer.push(ev.data);
-      receivedSize += ev.data.byteLength;
-      if(incomingMeta){
-        const pct = Math.round(receivedSize / incomingMeta.size * 100);
-        updateReceiveProgress(pct, receivedSize, incomingMeta.size);
-        if(receivedSize >= incomingMeta.size){
-          // rely on 'done' string or just finalize
-          const blob = new Blob(receiveBuffer, {type: incomingMeta.mime || 'application/octet-stream'});
-          offerReceivedFile(blob, incomingMeta);
-          incomingMeta = null;
-          receiveBuffer = [];
-          receivedSize = 0;
-        }
-      }
-    }
-  };
-}
-
-function updateReceiveProgress(pct, recv, total){
-  // show small UI update
-  connectedBadge.textContent = `Receiving — ${pct}%`;
-  sendStatus.textContent = `Receiving ${formatBytes(recv)} / ${formatBytes(total)}`
-}
-
-// when receive completes
-function offerReceivedFile(blob, meta){
-  const url = URL.createObjectURL(blob);
-  const item = document.createElement('div');
-  item.className = 'rec-item';
-  const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:700">${meta.name}</div><div class="small">${formatBytes(meta.size)}</div>`;
-  const right = document.createElement('div');
-  const a = document.createElement('a'); a.href = url; a.download = meta.name; a.textContent = 'Download'; a.className='link';
-  right.appendChild(a);
-  item.appendChild(left); item.appendChild(right);
-  recList.prepend(item);
-  connectedBadge.textContent = 'Connected';
-  sendStatus.textContent = 'Idle';
-  logEl('File received: '+meta.name);
-}
-
-// UI connected/disconnected
-function onConnected(){
-  document.body.classList.add('connected');
-  connectedBadge.textContent = 'Connected';
-  document.getElementById('connectCard').classList.add('connected');
-  document.getElementById('connectCard').classList.add('connected-glow');
-  sendFileBtn.disabled = !fileToSend;
-}
-function onDisconnected(){
-  document.body.classList.remove('connected');
-  connectedBadge.textContent = 'Not connected';
-  document.getElementById('connectCard').classList.remove('connected');
-  sendFileBtn.disabled = true;
-}
-
-// helper
-function formatBytes(bytes){ if(bytes===0) return '0 B'; const sizes=['B','KB','MB','GB','TB']; const i=Math.floor(Math.log(bytes)/Math.log(1024)); return (bytes/Math.pow(1024,i)).toFixed(i===0?0:2) + ' ' + sizes[i]; }
-
-// file selection
-selectFileBtn.onclick = () => fileInput.click();
-fileInput.onchange = (e) => {
-  if(e.target.files.length===0) return;
-  fileToSend = e.target.files[0];
-  pickedName.textContent = fileToSend.name;
-  pickedSize.textContent = formatBytes(fileToSend.size);
-  sendFileBtn.disabled = !dc || dc.readyState !== 'open';
-};
-
-// send file (chunked)
-sendFileBtn.onclick = async () => {
-  if(!dc || dc.readyState !== 'open') return alert('Not connected to peer yet.');
-  if(!fileToSend) return alert('Pick a file first.');
-  sendBar.style.width = '0%';
-  sendStatus.textContent = 'Starting send...';
-  const meta = {type:'meta', name: fileToSend.name, size: fileToSend.size, mime: fileToSend.type || ''};
-  dc.send(JSON.stringify(meta));
-  const CHUNK = 64 * 1024;
-  let offset = 0;
-  // set up backpressure limits
-  const BUFFERED_AMOUNT_HIGH = CHUNK * 16;
-  while(offset < fileToSend.size){
-    const slice = fileToSend.slice(offset, offset + CHUNK);
-    const ab = await slice.arrayBuffer();
-    // backpressure handling
-    if(dc.bufferedAmount > BUFFERED_AMOUNT_HIGH){
-      await waitForBufferedAmountLow(dc);
-    }
-    dc.send(ab);
-    offset += ab.byteLength;
-    const pct = Math.round(offset / fileToSend.size * 100);
-    sendBar.style.width = pct + '%';
-    sendStatus.textContent = `Sending ${formatBytes(offset)} / ${formatBytes(fileToSend.size)} (${pct}%)`;
+  // Join
+  joinBtn.onclick = () => {
+    const hostId = joinIdInput.value.trim();
+    if(!hostId){ alert('Enter Host ID'); return; }
+    peer = new Peer(undefined, {host:'peerjs.com', port:443, secure:true});
+    peer.on('open', () => {
+      const c = peer.connect(hostId);
+      setupConnection(c);
+    });
   }
-  dc.send(JSON.stringify({type:'done', name: fileToSend.name}));
-  sendStatus.textContent = 'Send complete';
-  logEl('Send complete: ' + fileToSend.name);
-};
 
-// wait for bufferedamountlow event
-function waitForBufferedAmountLow(channel){
-  return new Promise(resolve=>{
-    function handler(){ channel.removeEventListener('bufferedamountlow', handler); resolve(); }
-    channel.addEventListener('bufferedamountlow', handler);
-    // safety timeout
-    setTimeout(()=>{ try{ channel.removeEventListener('bufferedamountlow', handler); }catch(e){} resolve(); }, 1500);
-  });
-}
+  // Connection Setup
+  function setupConnection(c){
+    conn = c;
+    statusP.innerText = 'Connected!';
+    transferSection.style.display='block';
+    conn.on('data', receiveData);
+    conn.on('open', ()=>{ statusP.innerText = 'Connected! Ready to send files.'; });
+  }
 
-// cleanup
-function cleanupPeer(){
-  if(dc){ try{ dc.close(); }catch(e){} dc=null; }
-  if(pc){ try{ pc.close(); }catch(e){} pc=null; }
-  localSdpDiv.textContent = ''; qrCanvas.innerHTML = ''; localSdpText = '';
-  onDisconnected();
-}
+  // File Transfer
+  sendBtn.onclick = () => {
+    const file = fileInput.files[0];
+    if(!file){ alert('Select a file'); return; }
+    const chunkSize = 16*1024; // 16KB
+    let offset = 0;
+    fileProgress.value=0;
+    function sendChunk(){
+      const slice = file.slice(offset, offset+chunkSize);
+      const reader = new FileReader();
+      reader.onload = e => {
+        conn.send(e.target.result);
+        offset += chunkSize;
+        fileProgress.value = Math.min(100, (offset/file.size)*100);
+        if(offset < file.size) sendChunk();
+      };
+      reader.readAsArrayBuffer(slice);
+    }
+    sendChunk();
+  }
 
-// update connection state badge
-function updateConnectionState(state){
-  connectedBadge.textContent = state;
-}
-
-// --- SDP paste fallback: user can paste offer/answer text into remoteSdpInput and click Use ---
-document.getElementById('createOfferBtn').addEventListener('click', ()=>{/* handled above */});
-document.getElementById('showLocalSdpBtn').addEventListener('click', ()=>{ if(localSdpText) renderLocalSDP(localSdpText); else alert('Create offer first') });
-
-// --- when localDescription available, onicecandidate handler sets localSdpText and renders QR ---
-// But sometimes ICE takes time; we rely on onicecandidate null event.
-
-// Save profile when page hidden/unload
-window.addEventListener('beforeunload', ()=> saveProfile() );
-window.addEventListener('visibilitychange', ()=> { if(document.visibilityState==='hidden') saveProfile(); });
-
-// Small enhancement: auto-create ephemeral offer if user opens on two tabs of same device
-(async function tryAutoOfferForLocalTesting(){
-  // If user opens two tabs, they could manually create offer. We won't auto-create to avoid confusion.
-})();
-
-logEl('Androp ready — load profile and use Create Offer or Scan QR.');
+  // Receiving files
+  let receivedBuffers = [];
+  function receiveData(data){
+    receivedBuffers.push(data);
+    // Simple heuristic: if last chunk smaller than 16KB, assume file finished
+    if(data.byteLength < 16*1024){
+      const blob = new Blob(receivedBuffers);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `file_${Date.now()}`;
+      a.innerText = 'Download received file';
+      filesList.appendChild(a);
+      filesList.appendChild(document.createElement('br'));
+      receivedBuffers = [];
+      fileProgress.value=0;
+    }
+  }
 </script>
 </body>
 </html>
