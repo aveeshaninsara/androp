@@ -4,163 +4,276 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Androp</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- QRCode.js -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<!-- Firebase SDKs -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+  import { getDatabase, ref, set, get, onValue, push, update } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCCAdWENmFuXfruVUywVHlQi4NJdbwRwSw",
+    authDomain: "drop-48e1c.firebaseapp.com",
+    databaseURL: "https://drop-48e1c-default-rtdb.firebaseio.com",
+    projectId: "drop-48e1c",
+    storageBucket: "drop-48e1c.firebasestorage.app",
+    messagingSenderId: "1038653970015",
+    appId: "1:1038653970015:web:4ecb0891a794c40758edea",
+    measurementId: "G-MEF6129M9T"
+  };
+  const app = initializeApp(firebaseConfig);
+  window.db = getDatabase(app); // expose globally
+</script>
 <style>
-  body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f2f2f2; }
-  header { padding:10px; background:#333; color:#fff; text-align:center; }
-  .container { max-width:600px; margin:auto; padding:10px; }
-  .section { background:#fff; padding:15px; margin:10px 0; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1);}
-  label { display:block; margin:10px 0 5px; }
-  input[type=text] { width:100%; padding:8px; box-sizing:border-box; }
-  select { padding:8px; width:100%; }
-  button { padding:10px 15px; margin-top:10px; cursor:pointer; }
-  #qr { text-align:center; margin:10px 0; }
-  #fileProgress { width:100%; }
-  #filesList { margin-top:10px; }
-  @media(max-width:600px){ .container{padding:5px;} }
+  /* Reset + fonts */
+  * { margin:0; padding:0; box-sizing:border-box; font-family: 'Roboto', sans-serif;}
+  body {background:#f6f7fb; color:#333;}
+  header {padding:15px; text-align:center; background:#4b6cb7; color:#fff; font-size:1.5em;}
+  .container {max-width:600px; margin:auto; padding:15px;}
+  .card {background:#fff; border-radius:12px; padding:20px; margin-bottom:15px; box-shadow:0 5px 15px rgba(0,0,0,0.1);}
+  h2 {margin-bottom:10px; color:#333;}
+  input[type=text], input[type=file] {width:100%; padding:10px; border-radius:8px; border:1px solid #ccc; margin-bottom:10px;}
+  button {padding:12px 20px; border:none; border-radius:8px; background:#4b6cb7; color:#fff; font-weight:500; cursor:pointer; transition:0.3s; margin-right:10px;}
+  button:hover {background:#182848;}
+  #qr {text-align:center; margin:15px 0;}
+  #status {margin-top:10px; font-weight:500;}
+  #fileProgress {width:100%; height:15px; border-radius:8px; overflow:hidden; background:#eee; margin-top:10px;}
+  #fileProgress > div {height:100%; width:0%; background:#4b6cb7; transition:0.3s;}
+  .recent-connection {padding:8px 12px; background:#f0f0f0; border-radius:6px; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; transition:0.2s;}
+  .recent-connection:hover {background:#e0e0e0;}
+  @media(max-width:600px){ .container{padding:10px;} }
 </style>
 </head>
 <body>
-
-<header><h1>Androp</h1></header>
+<header>Androp</header>
 <div class="container">
 
-  <!-- Profile Section -->
-  <div class="section" id="profileSection">
+  <!-- Profile -->
+  <div class="card" id="profileCard">
     <h2>Profile</h2>
-    <label>Name:</label>
-    <input type="text" id="userName">
-    <label>Emoji:</label>
-    <select id="userEmoji"></select>
+    <label>Name</label>
+    <input type="text" id="userName" placeholder="Your Name">
+    <label>Emoji</label>
+    <div id="emojiButtons"></div>
     <button id="saveProfile">Save Profile</button>
   </div>
 
-  <!-- Connection Section -->
-  <div class="section" id="connectionSection">
-    <h2>Connection</h2>
-    <button id="hostBtn">Host</button>
+  <!-- Dashboard -->
+  <div class="card" id="dashboardCard" style="display:none;">
+    <h2>Dashboard</h2>
+    <div>
+      <button id="hostBtn">Host</button>
+      <button id="joinBtn">Join</button>
+    </div>
     <div id="qr"></div>
-    <label>Or Join using Host ID:</label>
-    <input type="text" id="joinId" placeholder="Host Peer ID">
-    <button id="joinBtn">Join</button>
-    <p id="status"></p>
+    <input type="text" id="joinId" placeholder="Enter Host ID to join" style="margin-top:10px;">
+    <div id="status"></div>
   </div>
 
-  <!-- File Transfer Section -->
-  <div class="section" id="transferSection" style="display:none;">
+  <!-- File Transfer -->
+  <div class="card" id="transferCard" style="display:none;">
     <h2>Send File</h2>
     <input type="file" id="fileInput">
-    <button id="sendBtn">Send</button>
-    <progress id="fileProgress" value="0" max="100"></progress>
-    <div id="filesList"></div>
+    <button id="sendBtn">Send File</button>
+    <div id="fileProgress"><div></div></div>
+    <div id="receivedFiles"></div>
   </div>
 
+  <!-- Recent Connections -->
+  <div class="card" id="recentCard" style="display:none;">
+    <h2>Recent Connections</h2>
+    <div id="recentList"></div>
+  </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-<script>
-  // ----------- Profile Management -----------
-  const emojis = ['😀','😎','🤖','🦄','🐱','🐶','🌟','🍕','⚡','💎'];
-  const emojiSelect = document.getElementById('userEmoji');
-  emojis.forEach(e=>{let o=document.createElement('option'); o.value=e; o.text=e; emojiSelect.appendChild(o);});
+<script type="module">
+import { getDatabase, ref, set, get, onValue, push, update } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-  const userNameInput = document.getElementById('userName');
-  const saveProfileBtn = document.getElementById('saveProfile');
+const emojis = ['😀','😎','🤖','🦄','🐱','🐶','🌟','🍕','⚡','💎'];
+const emojiContainer = document.getElementById('emojiButtons');
+const userNameInput = document.getElementById('userName');
+const saveProfileBtn = document.getElementById('saveProfile');
+const profileCard = document.getElementById('profileCard');
+const dashboardCard = document.getElementById('dashboardCard');
+const transferCard = document.getElementById('transferCard');
+const recentCard = document.getElementById('recentCard');
+const recentList = document.getElementById('recentList');
+const hostBtn = document.getElementById('hostBtn');
+const joinBtn = document.getElementById('joinBtn');
+const joinIdInput = document.getElementById('joinId');
+const qrDiv = document.getElementById('qr');
+const statusP = document.getElementById('status');
+const fileInput = document.getElementById('fileInput');
+const sendBtn = document.getElementById('sendBtn');
+const fileProgress = document.getElementById('fileProgress').firstElementChild;
+const receivedFilesDiv = document.getElementById('receivedFiles');
 
-  // Load saved profile
-  if(localStorage.getItem('andropName')) userNameInput.value = localStorage.getItem('andropName');
-  if(localStorage.getItem('andropEmoji')) emojiSelect.value = localStorage.getItem('andropEmoji');
+let db = window.db;
+let pc, dataChannel, roomId, isHost=false;
+let receivedBuffers=[];
 
-  saveProfileBtn.onclick = () => {
-    localStorage.setItem('andropName', userNameInput.value||`User${Math.floor(Math.random()*1000)}`);
-    localStorage.setItem('andropEmoji', emojiSelect.value);
-    alert('Profile saved!');
-  }
+// Render emoji buttons
+emojis.forEach(e=>{
+  const b = document.createElement('button'); b.innerText=e; b.onclick=()=>{ userEmoji=e; selectEmoji(e); };
+  emojiContainer.appendChild(b);
+});
+let userEmoji = localStorage.getItem('andropEmoji') || emojis[0];
 
-  // ----------- PeerJS Setup -----------
-  let peer, conn, isHost=false;
+function selectEmoji(e){ userEmoji=e; localStorage.setItem('andropEmoji', e); }
+function loadProfile(){
+  const name = localStorage.getItem('andropName') || `User${Math.floor(Math.random()*1000)}`;
+  userNameInput.value = name;
+  userEmoji = localStorage.getItem('andropEmoji') || emojis[0];
+}
+loadProfile();
+profileCard.style.display = 'block';
 
-  const hostBtn = document.getElementById('hostBtn');
-  const joinBtn = document.getElementById('joinBtn');
-  const joinIdInput = document.getElementById('joinId');
-  const qrDiv = document.getElementById('qr');
-  const statusP = document.getElementById('status');
-  const transferSection = document.getElementById('transferSection');
-  const fileInput = document.getElementById('fileInput');
-  const sendBtn = document.getElementById('sendBtn');
-  const fileProgress = document.getElementById('fileProgress');
-  const filesList = document.getElementById('filesList');
+saveProfileBtn.onclick = ()=>{
+  localStorage.setItem('andropName', userNameInput.value);
+  localStorage.setItem('andropEmoji', userEmoji);
+  profileCard.style.display='none';
+  dashboardCard.style.display='block';
+  recentCard.style.display='block';
+  loadRecentConnections();
+};
 
-  // Host
-  hostBtn.onclick = () => {
-    isHost=true;
-    peer = new Peer(undefined, {host:'peerjs.com', port:443, secure:true});
-    peer.on('open', id => {
-      statusP.innerText = `Your ID: ${id}`;
-      QRCode.toCanvas(qrDiv, id, {width:200});
-    });
-    peer.on('connection', c => setupConnection(c));
-  }
-
-  // Join
-  joinBtn.onclick = () => {
-    const hostId = joinIdInput.value.trim();
-    if(!hostId){ alert('Enter Host ID'); return; }
-    peer = new Peer(undefined, {host:'peerjs.com', port:443, secure:true});
-    peer.on('open', () => {
-      const c = peer.connect(hostId);
-      setupConnection(c);
-    });
-  }
-
-  // Connection Setup
-  function setupConnection(c){
-    conn = c;
-    statusP.innerText = 'Connected!';
-    transferSection.style.display='block';
-    conn.on('data', receiveData);
-    conn.on('open', ()=>{ statusP.innerText = 'Connected! Ready to send files.'; });
-  }
-
-  // File Transfer
-  sendBtn.onclick = () => {
-    const file = fileInput.files[0];
-    if(!file){ alert('Select a file'); return; }
-    const chunkSize = 16*1024; // 16KB
-    let offset = 0;
-    fileProgress.value=0;
-    function sendChunk(){
-      const slice = file.slice(offset, offset+chunkSize);
-      const reader = new FileReader();
-      reader.onload = e => {
-        conn.send(e.target.result);
-        offset += chunkSize;
-        fileProgress.value = Math.min(100, (offset/file.size)*100);
-        if(offset < file.size) sendChunk();
-      };
-      reader.readAsArrayBuffer(slice);
+// ---------- WebRTC + Firebase Signalling ----------
+function createPeerConnection(){
+  pc = new RTCPeerConnection();
+  dataChannel = pc.createDataChannel("fileChannel");
+  dataChannel.binaryType="arraybuffer";
+  dataChannel.onmessage = receiveData;
+  pc.ondatachannel = (event)=>{ dataChannel=event.channel; dataChannel.onmessage=receiveData; };
+  pc.onicecandidate = e=>{
+    if(e.candidate){
+      const candRef = ref(db, `rooms/${roomId}/candidates/${isHost?'host':'joiner'}`);
+      push(candRef, e.candidate.toJSON());
     }
-    sendChunk();
-  }
+  };
+}
 
-  // Receiving files
-  let receivedBuffers = [];
-  function receiveData(data){
-    receivedBuffers.push(data);
-    // Simple heuristic: if last chunk smaller than 16KB, assume file finished
-    if(data.byteLength < 16*1024){
-      const blob = new Blob(receivedBuffers);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `file_${Date.now()}`;
-      a.innerText = 'Download received file';
-      filesList.appendChild(a);
-      filesList.appendChild(document.createElement('br'));
-      receivedBuffers = [];
-      fileProgress.value=0;
+// ---------- Host ----------
+hostBtn.onclick = async ()=>{
+  isHost=true;
+  roomId='room-'+Math.floor(Math.random()*10000);
+  createPeerConnection();
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await set(ref(db, `rooms/${roomId}/offer`), offer.toJSON());
+  QRCode.toCanvas(qrDiv, roomId, {width:200});
+  statusP.innerText='Waiting for joiner...';
+
+  // Listen for answer
+  const answerRef = ref(db, `rooms/${roomId}/answer`);
+  onValue(answerRef, async snap=>{
+    const answer = snap.val();
+    if(answer && pc.currentRemoteDescription==null){
+      await pc.setRemoteDescription(answer);
+      statusP.innerText='Connected!';
+      transferCard.style.display='block';
+      saveRecentConnection(roomId);
     }
+  });
+
+  // Listen for ICE candidates from joiner
+  const candRef = ref(db, `rooms/${roomId}/candidates/joiner`);
+  onValue(candRef, snap=>{
+    snap.forEach(child=>{
+      const c = child.val();
+      pc.addIceCandidate(c);
+    });
+  });
+};
+
+// ---------- Joiner ----------
+joinBtn.onclick = async ()=>{
+  isHost=false;
+  roomId=joinIdInput.value.trim();
+  if(!roomId){ alert('Enter Host Room ID'); return; }
+  createPeerConnection();
+
+  const offerSnap = await get(ref(db, `rooms/${roomId}/offer`));
+  const offer = offerSnap.val();
+  if(!offer){ alert('Invalid room'); return; }
+
+  await pc.setRemoteDescription(offer);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await set(ref(db, `rooms/${roomId}/answer`), answer.toJSON());
+
+  statusP.innerText='Connected!';
+  transferCard.style.display='block';
+  saveRecentConnection(roomId);
+
+  // Listen for ICE candidates from host
+  const candRef = ref(db, `rooms/${roomId}/candidates/host`);
+  onValue(candRef, snap=>{
+    snap.forEach(child=>{
+      const c = child.val();
+      pc.addIceCandidate(c);
+    });
+  });
+};
+
+// ---------- File Transfer ----------
+sendBtn.onclick = ()=>{
+  const file = fileInput.files[0];
+  if(!file){ alert('Select a file'); return; }
+  const chunkSize = 64*1024;
+  let offset=0;
+  fileProgress.style.width='0%';
+
+  function sendChunk(){
+    const slice = file.slice(offset, offset+chunkSize);
+    const reader = new FileReader();
+    reader.onload = e=>{
+      dataChannel.send(e.target.result);
+      offset+=chunkSize;
+      fileProgress.style.width=Math.min(100,(offset/file.size)*100)+'%';
+      if(offset<file.size) sendChunk();
+    };
+    reader.readAsArrayBuffer(slice);
   }
+  sendChunk();
+};
+
+function receiveData(event){
+  receivedBuffers.push(event.data);
+  if(event.data.byteLength < 64*1024){ // last chunk
+    const blob = new Blob(receivedBuffers);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url;
+    a.download=`file_${Date.now()}`;
+    a.innerText='Download received file';
+    receivedFilesDiv.appendChild(a);
+    receivedFilesDiv.appendChild(document.createElement('br'));
+    receivedBuffers=[];
+    fileProgress.style.width='0%';
+  }
+}
+
+// ---------- Recent Connections ----------
+function saveRecentConnection(id){
+  let recents = JSON.parse(localStorage.getItem('andropRecents')||'[]');
+  if(!recents.includes(id)) recents.unshift(id);
+  localStorage.setItem('andropRecents', JSON.stringify(recents.slice(0,5)));
+  loadRecentConnections();
+}
+
+function loadRecentConnections(){
+  recentList.innerHTML='';
+  let recents = JSON.parse(localStorage.getItem('andropRecents')||'[]');
+  recents.forEach(r=>{
+    const div=document.createElement('div');
+    div.className='recent-connection';
+    div.innerText=r;
+    div.onclick=()=>{ joinIdInput.value=r; joinBtn.click(); };
+    recentList.appendChild(div);
+  });
+}
 </script>
 </body>
 </html>
