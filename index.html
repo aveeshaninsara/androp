@@ -2,642 +2,347 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ProCam Ultra</title>
-    <link rel="icon" href="data:;base64,iVBORw0KGgo="> <!-- Fixes Favicon 404 -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Sphere Camera (No Gyro)</title>
     <style>
-        :root {
-            --accent: #FFD700;
-            --bg: #000000;
-            --surface: rgba(20, 20, 20, 0.8);
-            --safe-area-top: env(safe-area-inset-top, 20px);
-            --safe-area-bottom: env(safe-area-inset-bottom, 20px);
-        }
-
-        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; outline: none; }
+        body { margin: 0; overflow: hidden; background: #111; font-family: sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
         
-        body {
-            margin: 0; padding: 0;
-            background: var(--bg);
-            color: white;
-            font-family: 'Inter', sans-serif;
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* --- TOP BAR --- */
-        .top-bar {
-            height: 60px;
-            padding-top: var(--safe-area-top);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-left: 20px; padding-right: 20px;
-            z-index: 50;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
-        }
-
-        .icon-btn {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(5px);
-            border: none;
-            color: white;
-            width: 40px; height: 40px;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .icon-btn:active { transform: scale(0.95); background: rgba(255,255,255,0.2); }
-        .icon-btn.active { background: var(--accent); color: black; }
-
-        /* --- VIEWFINDER --- */
-        .viewport {
-            flex-grow: 1;
-            width: 100%;
-            position: relative;
-            background: #111;
-            display: flex;
-            align-items: center;  /* Centers vertically */
-            justify-content: center; /* Centers horizontally */
-            overflow: hidden;
-        }
-
-        .video-container {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-        }
-
-        /* Aspect Ratio Logic */
-        .video-container[data-ratio="16:9"] { width: 100%; height: 100%; }
-        .video-container[data-ratio="4:3"] { width: 100%; aspect-ratio: 3/4; height: auto; max-height: 100%; }
-        /* 1:1 Centered - critical fix */
-        .video-container[data-ratio="1:1"] { 
-            width: auto; 
-            height: auto; 
-            aspect-ratio: 1/1; 
-            max-width: 100%;
-            max-height: 100%; 
-        }
-
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform-origin: center;
-        }
-
-        /* Digital Zoom Layer (CSS Transform fallback) */
-        .zoom-container {
-            width: 100%; height: 100%;
-            transform-origin: center;
-            transition: transform 0.1s linear; 
-        }
-
-        /* Zoom Text Indicator */
-        .zoom-indicator {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.5);
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-        .zoom-indicator.visible { opacity: 1; }
-
-        /* --- BOTTOM CONTROLS --- */
-        .controls-layer {
-            height: 220px; /* Fixed height to prevent jumping */
-            background: rgba(0,0,0,0.9);
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            padding-bottom: calc(20px + var(--safe-area-bottom));
-            z-index: 50;
-            position: relative;
-        }
-
-        /* Mode Scroller */
-        .mode-wheel {
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 25px;
-            margin-bottom: 20px;
-            perspective: 500px;
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; /* Let clicks pass through to 3D view */
+            display: flex; flex-direction: column; justify-content: space-between; align-items: center;
         }
         
-        .mode-item {
-            color: #888;
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 1px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .mode-item.active {
-            color: var(--accent);
-            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
-            transform: scale(1.1);
-        }
-
-        /* Buttons Row */
-        .action-row {
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            padding: 0 30px;
-        }
-
-        .gallery-preview {
-            width: 50px; height: 50px;
-            background: #333;
+        /* Viewfinder Reticle */
+        .reticle {
+            width: 250px; height: 250px;
+            border: 2px dashed rgba(255, 255, 255, 0.5);
             border-radius: 10px;
-            overflow: hidden;
-            border: 2px solid rgba(255,255,255,0.2);
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* Dim outside area */
+            pointer-events: none;
+            z-index: 10;
         }
-        .gallery-preview img { width: 100%; height: 100%; object-fit: cover; }
 
-        .shutter-ring {
-            width: 80px; height: 80px;
-            border: 4px solid white;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
+        /* Controls */
+        .controls {
+            margin-bottom: 30px;
+            pointer-events: auto;
+            display: flex; gap: 20px; z-index: 20;
         }
         
-        .shutter-core {
-            width: 68px; height: 68px;
-            background: white;
-            border-radius: 50%;
-            transition: all 0.2s;
+        button {
+            padding: 15px 30px; font-size: 18px; border: none; border-radius: 30px;
+            cursor: pointer; font-weight: bold; text-transform: uppercase;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: transform 0.1s;
         }
+        button:active { transform: scale(0.95); }
         
-        .shutter-ring:active .shutter-core { transform: scale(0.9); }
-        .shutter-ring.recording { border-color: #ff3b30; }
-        .shutter-ring.recording .shutter-core { background: #ff3b30; width: 30px; height: 30px; border-radius: 6px; }
-
-        /* --- MODALS --- */
-        .modal {
-            position: fixed; top:0; left:0; width:100%; height:100%;
-            background: rgba(0,0,0,0.95);
-            z-index: 100;
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .modal.open { display: flex; animation: fadeIn 0.2s; }
-        @keyframes fadeIn { from{opacity:0;} to{opacity:1;}}
-
-        .settings-content, .ai-content {
-            background: #1a1a1a;
-            width: 100%; max-width: 350px;
-            border-radius: 16px;
-            padding: 20px;
-            border: 1px solid #333;
-        }
-
-        .setting-row { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; font-size: 14px;}
+        #btn-capture { background: #ff4757; color: white; }
+        #btn-download { background: #2ed573; color: white; display: none; }
         
-        /* High Zoom Preview Effect */
-        #high-zoom-preview {
-            position: fixed; top:0; left:0; width:100%; height:100%;
-            background: black;
-            z-index: 90;
-            display: none;
-            justify-content: center; align-items: center;
+        /* Hidden Video Element for Stream */
+        #webcam { display: none; }
+        
+        .status {
+            margin-top: 20px; color: white; background: rgba(0,0,0,0.5);
+            padding: 5px 15px; border-radius: 15px; font-size: 14px;
+            pointer-events: auto;
         }
-        #preview-img {
-            max-width: 90%; max-height: 80%;
-            filter: grayscale(100%) contrast(1.2) drop-shadow(0 0 15px cyan);
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
-            border: 1px solid cyan;
-        }
-        .scan-line {
-            position: absolute; width: 100%; height: 2px; background: cyan;
-            top: 0; animation: scan 1.5s linear; box-shadow: 0 0 10px cyan;
-        }
-        @keyframes scan { 0% {top:0;} 100% {top:100%;} }
-
     </style>
 </head>
 <body>
 
-    <!-- Top UI -->
-    <div class="top-bar">
-        <button class="icon-btn" id="torch-toggle" onclick="toggleFlash()">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
-        </button>
-        <button class="icon-btn" onclick="toggleSettings()">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-        </button>
-    </div>
+    <!-- 3D Container -->
+    <div id="canvas-container"></div>
 
-    <!-- Viewfinder -->
-    <div class="viewport" id="viewport">
-        <div class="video-container" id="video-wrapper" data-ratio="16:9">
-            <div class="zoom-container" id="zoom-layer">
-                <video id="cam-feed" autoplay playsinline muted></video>
-            </div>
-            <div class="zoom-indicator" id="zoom-text">1.0x</div>
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+        <div class="status" id="status-text">Drag to look around. Align a gray face with the box.</div>
+        <div class="reticle"></div>
+        <div class="controls">
+            <button id="btn-capture">Capture Segment</button>
+            <button id="btn-download">Download Sphere</button>
         </div>
     </div>
 
-    <!-- Controls -->
-    <div class="controls-layer">
-        <div class="mode-wheel">
-            <div class="mode-item" onclick="setMode('video')">VIDEO</div>
-            <div class="mode-item active" onclick="setMode('photo')">PHOTO</div>
-            <div class="mode-item" onclick="setMode('pano')">PANO</div>
-            <div class="mode-item" onclick="setMode('pro')">PRO</div>
-        </div>
-        
-        <div class="action-row">
-            <div class="gallery-preview">
-                <img id="last-shot" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
-            </div>
-            
-            <div class="shutter-ring" id="shutter-btn">
-                <div class="shutter-core"></div>
-            </div>
-            
-            <button class="icon-btn" onclick="flipCam()" style="width:48px; height:48px; background: rgba(50,50,50,0.5);">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5l3.5 3.5-3.5 3.5z"></path></svg>
-            </button>
-        </div>
-    </div>
+    <!-- Hidden Video & Canvas for processing -->
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="temp-canvas" style="display:none;"></canvas>
 
-    <!-- Hidden Canvas -->
-    <canvas id="process-canvas" style="display:none;"></canvas>
-
-    <!-- Modals -->
-    <div class="modal" id="settings-modal">
-        <div class="settings-content">
-            <h3 style="margin-top:0;">Camera Settings</h3>
-            <div class="setting-row">
-                <span>Aspect Ratio</span>
-                <button onclick="toggleRatio()" id="ratio-txt" style="background:#333; color:white; border:none; padding:5px 10px; border-radius:4px;">16:9</button>
-            </div>
-            <div class="setting-row">
-                <span>Stabilization (OIS/EIS)</span>
-                <input type="checkbox" id="stab-toggle" checked onchange="restartStream()">
-            </div>
-            <div class="setting-row">
-                <span>Location Tagging</span>
-                <input type="checkbox">
-            </div>
-            <button onclick="toggleSettings()" style="width:100%; padding:10px; background:var(--accent); border:none; border-radius:8px; font-weight:bold;">Close</button>
-        </div>
-    </div>
-
-    <div class="modal" id="ai-modal">
-        <div class="ai-content">
-            <h3 style="color:var(--accent)">AI Analysis</h3>
-            <div id="ai-status" style="margin-bottom:10px; font-style:italic; color:#888;">Processing...</div>
-            <p id="ai-result" style="font-size:14px; line-height:1.5; color:#eee;"></p>
-            <button onclick="document.getElementById('ai-modal').classList.remove('open')" style="margin-top:15px; width:100%; padding:8px; border:1px solid #555; background:transparent; color:white; border-radius:6px;">Close</button>
-        </div>
-    </div>
-
-    <!-- Special Zoom Preview -->
-    <div id="high-zoom-preview">
-        <div style="position:relative;">
-            <div class="scan-line"></div>
-            <img id="preview-img" src="">
-            <div style="position:absolute; bottom:10px; width:100%; text-align:center; color:cyan; font-family:monospace; text-shadow:0 0 5px cyan;">ENHANCING DETAILS...</div>
-        </div>
-    </div>
-
-<script>
-    // --- SALT & CONFIG ---
-    // Splitting key to avoid simple scrapers
-    const k1 = "AIzaSyDPumBf";
-    const k2 = "FzUCvchOpuHbnc";
-    const k3 = "1rnr5X3_pdPCU";
-    const API_KEY = k1 + k2 + k3;
-
-    // --- DOM ELEMENTS ---
-    const video = document.getElementById('cam-feed');
-    const zoomLayer = document.getElementById('zoom-layer');
-    const zoomText = document.getElementById('zoom-text');
-    const shutter = document.getElementById('shutter-btn');
-    const canvas = document.getElementById('process-canvas');
-    const videoWrapper = document.getElementById('video-wrapper');
-    const viewport = document.getElementById('viewport');
-
-    // --- STATE ---
-    let stream = null;
-    let track = null;
-    let mode = 'photo';
-    let facing = 'environment';
-    let zoom = 1.0;
-    let maxZoom = 10; 
-    let ratio = '16:9';
-    let isRecording = false;
-    let mediaRecorder;
-    let chunks = [];
-    let pinchStart = 0;
-    let startZoom = 1;
-    let flashState = false;
-
-    // --- INITIALIZATION ---
-    async function initCamera() {
-        if(stream) stream.getTracks().forEach(t => t.stop());
-
-        const constraints = {
-            audio: mode === 'video',
-            video: {
-                facingMode: facing,
-                width: { ideal: 3840 },
-                height: { ideal: 2160 },
-                // Enable stabilization if checked
-                videoStabilizationMode: document.getElementById('stab-toggle').checked ? 'any' : 'off'
+    <!-- Import Three.js from CDN -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
             }
-        };
-
-        try {
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
-            video.srcObject = stream;
-            track = stream.getVideoTracks()[0];
-
-            // Get hardware capabilities
-            const caps = track.getCapabilities();
-            if(caps.zoom) maxZoom = caps.zoom.max;
-
-            // Apply Mirroring if front cam
-            zoomLayer.style.transform = facing === 'user' ? 'scaleX(-1)' : 'none';
-
-        } catch (e) {
-            console.error(e);
-            alert("Camera access denied or unsafe context. Use HTTPS/Localhost.");
         }
-    }
+    </script>
 
-    function restartStream() { initCamera(); }
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // --- TOUCH / PINCH ZOOM ---
-    viewport.addEventListener('touchstart', e => {
-        if(e.touches.length === 2) {
-            e.preventDefault(); // Prevent page scroll
-            pinchStart = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-            startZoom = zoom;
-        }
-    }, {passive: false});
-
-    viewport.addEventListener('touchmove', e => {
-        if(e.touches.length === 2) {
-            e.preventDefault();
-            const dist = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-            const delta = dist / pinchStart;
-            
-            let newZoom = startZoom * delta;
-            newZoom = Math.min(Math.max(newZoom, 1), 100); // Allow up to 100x
-            applyZoom(newZoom);
-        }
-    }, {passive: false});
-
-    function applyZoom(val) {
-        zoom = val;
-        zoomText.innerText = val.toFixed(1) + 'x';
-        zoomText.classList.add('visible');
-        clearTimeout(window.zoomTimer);
-        window.zoomTimer = setTimeout(()=> zoomText.classList.remove('visible'), 1500);
-
-        // Hybrid Zoom Logic
-        const caps = track.getCapabilities();
+        let camera, scene, renderer, controls;
+        let skyboxMesh;
+        let materials = [];
+        let capturedCount = 0;
         
-        if (caps.zoom) {
-            // Use hardware zoom as much as possible
-            const hwMax = caps.zoom.max;
-            if (zoom <= hwMax) {
-                track.applyConstraints({advanced: [{zoom: zoom}]});
-                // Reset digital transform
-                zoomLayer.style.transform = facing === 'user' ? 'scaleX(-1)' : 'none';
-            } else {
-                // Max out hardware, use CSS for rest
-                track.applyConstraints({advanced: [{zoom: hwMax}]});
-                const digitalFactor = zoom / hwMax;
-                const scaleStr = `scale(${digitalFactor})`;
-                zoomLayer.style.transform = facing === 'user' ? `scaleX(-1) ${scaleStr}` : scaleStr;
+        const video = document.getElementById('webcam');
+        const tempCanvas = document.getElementById('temp-canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        const statusText = document.getElementById('status-text');
+
+        // Initialize App
+        init();
+        startCamera();
+        animate();
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // 1. Setup Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222);
+
+            // 2. Setup Camera (FOV 90 is good for face alignment)
+            camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 0.1); // Slightly offset from center
+
+            // 3. Setup Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // 4. Controls (Manual Alignment - Drag to rotate)
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableZoom = false;
+            controls.enablePan = false;
+            controls.rotateSpeed = -0.5; // Invert drag to feel like "looking around" inside
+            controls.enableDamping = true;
+
+            // 5. Create the "Globe" (Skybox Cube)
+            // We use a BoxGeometry because it has 6 flat faces which are perfect for "cards"
+            // that don't distort capture images like a sphere would.
+            const geometry = new THREE.BoxGeometry(10, 10, 10);
+            
+            // Create 6 materials (one for each face)
+            // Order: Right, Left, Top, Bottom, Front, Back
+            for (let i = 0; i < 6; i++) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512; canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                
+                // Draw placeholder graphics
+                ctx.fillStyle = '#444'; 
+                ctx.fillRect(0,0,512,512);
+                ctx.strokeStyle = '#666'; 
+                ctx.lineWidth = 10; 
+                ctx.strokeRect(0,0,512,512);
+                ctx.fillStyle = '#fff'; 
+                ctx.font = '40px Arial'; 
+                ctx.textAlign = 'center';
+                ctx.fillText(`Face ${i+1}`, 256, 256);
+
+                const tex = new THREE.CanvasTexture(canvas);
+                materials.push(new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide }));
             }
-        } else {
-            // Pure Digital
-            const scaleStr = `scale(${zoom})`;
-            zoomLayer.style.transform = facing === 'user' ? `scaleX(-1) ${scaleStr}` : scaleStr;
-        }
-    }
 
-    // --- FLASH / TORCH ---
-    async function toggleFlash() {
-        if (!track) return;
-        const caps = track.getCapabilities();
-        if (!caps.torch) {
-            alert("Flash not supported on this device/camera.");
-            return;
+            skyboxMesh = new THREE.Mesh(geometry, materials);
+            // Invert scale to put normals on inside (so we see it from inside)
+            skyboxMesh.scale.set(-1, 1, 1); 
+            scene.add(skyboxMesh);
+
+            // 6. Raycaster for selection
+            window.addEventListener('resize', onWindowResize);
+            document.getElementById('btn-capture').addEventListener('click', onCapture);
+            document.getElementById('btn-download').addEventListener('click', downloadEquirectangular);
         }
-        
-        try {
-            flashState = !flashState;
-            await track.applyConstraints({
-                advanced: [{ torch: flashState }]
+
+        async function startCamera() {
+            try {
+                // Request square aspect ratio if possible, otherwise crop later
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment', aspectRatio: 1 } 
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                alert("Camera access denied or error: " + err);
+            }
+        }
+
+        function onCapture() {
+            if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+            // 1. Find which face we are looking at
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); // Ray from center of screen
+            
+            // Note: We raycast against the box. Since scale is -1, we need to be careful with direction
+            // But basic intersection works.
+            const intersects = raycaster.intersectObject(skyboxMesh);
+
+            if (intersects.length > 0) {
+                const faceIndex = intersects[0].face.materialIndex;
+                const material = materials[faceIndex];
+
+                // 2. Draw Webcam frame to texture
+                const size = 1024; // High res texture
+                tempCanvas.width = size;
+                tempCanvas.height = size;
+                
+                // Crop center square from video
+                const vidH = video.videoHeight;
+                const vidW = video.videoWidth;
+                const minDim = Math.min(vidW, vidH);
+                const sx = (vidW - minDim) / 2;
+                const sy = (vidH - minDim) / 2;
+
+                // Flip horizontally because we are inside a mirrored cube (scale.x = -1)
+                tempCtx.translate(size, 0);
+                tempCtx.scale(-1, 1);
+                
+                tempCtx.drawImage(video, sx, sy, minDim, minDim, 0, 0, size, size);
+
+                // 3. Update Material
+                const newTex = new THREE.CanvasTexture(tempCanvas);
+                newTex.colorSpace = THREE.SRGBColorSpace; // Correct color profile
+                
+                // Dispose old texture to free memory
+                material.map.dispose();
+                material.map = newTex;
+                material.needsUpdate = true;
+
+                // 4. Feedback
+                flashScreen();
+                statusText.innerText = "Captured! Rotate to next face.";
+                
+                // Check if simple count logic (rough estimate)
+                if (!material.userData.captured) {
+                    material.userData.captured = true;
+                    capturedCount++;
+                }
+
+                if (capturedCount >= 6) {
+                    document.getElementById('btn-download').style.display = 'block';
+                    statusText.innerText = "All segments filled! Ready to download.";
+                }
+            }
+        }
+
+        // Generate Equirectangular Image using a Custom Shader
+        function downloadEquirectangular() {
+            const width = 4096;
+            const height = 2048;
+
+            // Create a CubeTexture from our 6 existing materials
+            // We have to extract the images from the materials
+            const images = materials.map(m => m.map.image);
+            
+            // Standard order for CubeTexture is: px, nx, py, ny, pz, nz
+            // Our materials array corresponds to geometry faces. 
+            // BoxGeometry face order depends, but usually: Right, Left, Top, Bottom, Front, Back
+            // We need to map our materials array to this order correctly.
+            // Let's rely on Three.js standard box mapping.
+            
+            // To ensure 100% seamless export, we will render the SCENE itself to a WebGLRenderTarget
+            // instead of manually stitching images. This handles rotations perfectly.
+            
+            const exportScene = new THREE.Scene();
+            // Duplicate the mesh for export
+            const exportMesh = new THREE.Mesh(skyboxMesh.geometry.clone(), materials);
+            exportMesh.scale.set(-1, 1, 1);
+            exportMesh.rotation.copy(skyboxMesh.rotation); // Keep orientation? No, reset for standard export
+            exportMesh.rotation.set(0,0,0);
+            exportScene.add(exportMesh);
+
+            // Create a CubeCamera to snapshot the box from the inside
+            const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(2048);
+            const cubeCamera = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget);
+            exportScene.add(cubeCamera);
+            
+            // Render the box into the CubeCamera
+            cubeCamera.update(renderer, exportScene);
+
+            // Now, use a shader to convert that CubeRenderTarget to Equirectangular
+            const equiMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    map: { value: cubeRenderTarget.texture },
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = vec4( position, 1.0 );
+                    }
+                `,
+                fragmentShader: `
+                    uniform samplerCube map;
+                    varying vec2 vUv;
+                    const float PI = 3.14159265359;
+                    const float TWO_PI = 6.28318530718;
+                    void main() {
+                        vec2 uv = vUv;
+                        float longitude = uv.x * TWO_PI - PI;
+                        float latitude = uv.y * PI - PI / 2.0;
+                        vec3 dir = vec3(
+                            -cos(latitude) * sin(longitude), // Negate X for correct mapping
+                            sin(latitude),
+                            -cos(latitude) * cos(longitude)  // Negate Z
+                        );
+                        gl_FragColor = textureCube(map, normalize(dir));
+                    }
+                `,
+                side: THREE.DoubleSide
             });
-            document.getElementById('torch-toggle').classList.toggle('active', flashState);
-        } catch (e) {
-            console.error("Torch error", e);
-            // Don't alert here, just fail silently or log
+
+            const exportPlane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), equiMaterial);
+            const postScene = new THREE.Scene();
+            postScene.add(exportPlane);
+            const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+            // Render to canvas
+            renderer.setSize(width, height);
+            renderer.render(postScene, postCamera);
+
+            // Save
+            const dataURL = renderer.domElement.toDataURL('image/jpeg', 0.9);
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = '3d-sphere-photo.jpg';
+            link.click();
+
+            // Reset renderer
+            renderer.setSize(window.innerWidth, window.innerHeight);
         }
-    }
 
-    // --- CAPTURE LOGIC ---
-    shutter.addEventListener('click', () => {
-        if (mode === 'video') {
-            toggleVideo();
-        } else {
-            takePhoto();
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         }
-    });
 
-    function getFileName(prefix, ext) {
-        const now = new Date();
-        const str = now.toISOString().replace(/[-:T.]/g, '').slice(0, 14); // YYYYMMDDHHMMSS
-        return `${str}_${prefix}.${ext}`;
-    }
-
-    async function takePhoto() {
-        // Setup Canvas
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        
-        // Draw standard frame
-        ctx.drawImage(video, 0, 0);
-
-        // If Digital Zoom active, crop the canvas
-        // (Simplified for this demo: we just capture the full frame 
-        // unless we want to manually implement crop-stretching)
-
-        const dataURL = canvas.toDataURL('image/jpeg', 1.0);
-        document.getElementById('last-shot').src = dataURL;
-
-        // Check for High Zoom Preview (>5x)
-        if (zoom > 5) {
-            showSciFiPreview(dataURL);
-            setTimeout(() => {
-                download(dataURL, getFileName('IMG', 'jpg'));
-                analyzeAI(dataURL);
-            }, 1500);
-        } else {
-            // Immediate
-            download(dataURL, getFileName('IMG', 'jpg'));
-            analyzeAI(dataURL);
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
         }
-    }
 
-    function showSciFiPreview(url) {
-        const box = document.getElementById('high-zoom-preview');
-        const img = document.getElementById('preview-img');
-        img.src = url;
-        box.style.display = 'flex';
-        setTimeout(() => box.style.display = 'none', 1600);
-    }
-
-    function toggleVideo() {
-        if (!isRecording) {
-            // Start
-            chunks = [];
-            const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") 
-                ? "video/webm;codecs=vp9" : "video/webm";
-            
-            mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
-            mediaRecorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
-            mediaRecorder.onstop = saveVideo;
-            mediaRecorder.start();
-            
-            isRecording = true;
-            shutter.classList.add('recording');
-            shutter.querySelector('.shutter-core').style.background = '#ff3b30';
-        } else {
-            // Stop
-            mediaRecorder.stop();
-            isRecording = false;
-            shutter.classList.remove('recording');
-            shutter.querySelector('.shutter-core').style.background = '#ff3b30'; // Keep red for video mode
+        function flashScreen() {
+            const div = document.createElement('div');
+            div.style.position = 'fixed'; div.style.top = 0; div.style.left = 0;
+            div.style.width = '100%'; div.style.height = '100%';
+            div.style.background = 'white'; div.style.opacity = 0.8;
+            div.style.transition = 'opacity 0.2s'; div.style.pointerEvents = 'none';
+            document.body.appendChild(div);
+            setTimeout(() => div.style.opacity = 0, 50);
+            setTimeout(() => div.remove(), 250);
         }
-    }
-
-    function saveVideo() {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        download(url, getFileName('VID', 'webm'));
-    }
-
-    function download(url, name) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    }
-
-    // --- AI LOGIC ---
-    async function analyzeAI(base64) {
-        // Extract raw b64
-        const content = base64.split(',')[1];
-        
-        // Open Modal
-        const modal = document.getElementById('ai-modal');
-        const resBox = document.getElementById('ai-result');
-        const status = document.getElementById('ai-status');
-        modal.classList.add('open');
-        status.innerText = "Analyzing Scene...";
-        resBox.innerText = "";
-
-        // API Call
-        try {
-            const req = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { text: "Identify the object. If zoomed in/blurry, enhance context. If calendar, read dates. Keep it short." },
-                            { inline_data: { mime_type: "image/jpeg", data: content } }
-                        ]
-                    }]
-                })
-            });
-            
-            if(!req.ok) throw new Error("API Limit or Network Block");
-            
-            const data = await req.json();
-            const text = data.candidates[0].content.parts[0].text;
-            status.innerText = "Analysis Complete";
-            resBox.innerText = text;
-
-        } catch (e) {
-            status.innerText = "Error";
-            resBox.innerText = "AI unreachable. (Check Network/CORS)";
-            console.error(e);
-        }
-    }
-
-    // --- UI HELPERS ---
-    function toggleSettings() {
-        const m = document.getElementById('settings-modal');
-        m.classList.toggle('open');
-    }
-
-    function setMode(m) {
-        mode = m;
-        document.querySelectorAll('.mode-item').forEach(el => el.classList.remove('active'));
-        event.target.classList.add('active');
-        
-        // Update Shutter Color
-        const core = document.querySelector('.shutter-core');
-        if (m === 'video' || m === 'slow-mo') core.style.background = '#ff3b30';
-        else core.style.background = 'white';
-
-        restartStream();
-    }
-
-    function toggleRatio() {
-        const map = { '16:9': '4:3', '4:3': '1:1', '1:1': '16:9' };
-        ratio = map[ratio];
-        videoWrapper.setAttribute('data-ratio', ratio);
-        document.getElementById('ratio-txt').innerText = ratio;
-    }
-
-    function flipCam() {
-        facing = facing === 'user' ? 'environment' : 'user';
-        initCamera();
-    }
-
-    // Boot
-    window.addEventListener('load', initCamera);
-
-</script>
+    </script>
 </body>
 </html>
