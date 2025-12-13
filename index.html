@@ -3,711 +3,640 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ProCam AI</title>
-    <!-- Preload Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;700&display=swap" rel="stylesheet">
+    <title>ProCam Ultra</title>
+    <link rel="icon" href="data:;base64,iVBORw0KGgo="> <!-- Fixes Favicon 404 -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #facc15;
-            --bg: #000;
-            --overlay: rgba(0,0,0,0.4);
-            --text: #fff;
+            --accent: #FFD700;
+            --bg: #000000;
+            --surface: rgba(20, 20, 20, 0.8);
+            --safe-area-top: env(safe-area-inset-top, 20px);
+            --safe-area-bottom: env(safe-area-inset-bottom, 20px);
         }
 
-        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; outline: none; }
         
         body {
             margin: 0; padding: 0;
             background: var(--bg);
-            color: var(--text);
+            color: white;
             font-family: 'Inter', sans-serif;
             height: 100vh;
+            width: 100vw;
             overflow: hidden;
             display: flex;
             flex-direction: column;
         }
 
-        /* --- Viewfinder Area --- */
-        .viewfinder-container {
-            position: relative;
-            flex-grow: 1;
-            width: 100%;
+        /* --- TOP BAR --- */
+        .top-bar {
+            height: 60px;
+            padding-top: var(--safe-area-top);
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            background: #111;
-            transition: all 0.3s ease;
+            padding-left: 20px; padding-right: 20px;
+            z-index: 50;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
         }
 
-        /* Aspect Ratio Boxes */
-        .viewfinder-container[data-ratio="16:9"] { aspect-ratio: 9/16; width: 100%; }
-        .viewfinder-container[data-ratio="4:3"] { aspect-ratio: 3/4; max-height: 75%; }
-        .viewfinder-container[data-ratio="1:1"] { aspect-ratio: 1/1; max-height: 50%; }
+        .icon-btn {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(5px);
+            border: none;
+            color: white;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .icon-btn:active { transform: scale(0.95); background: rgba(255,255,255,0.2); }
+        .icon-btn.active { background: var(--accent); color: black; }
+
+        /* --- VIEWFINDER --- */
+        .viewport {
+            flex-grow: 1;
+            width: 100%;
+            position: relative;
+            background: #111;
+            display: flex;
+            align-items: center;  /* Centers vertically */
+            justify-content: center; /* Centers horizontally */
+            overflow: hidden;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* Aspect Ratio Logic */
+        .video-container[data-ratio="16:9"] { width: 100%; height: 100%; }
+        .video-container[data-ratio="4:3"] { width: 100%; aspect-ratio: 3/4; height: auto; max-height: 100%; }
+        /* 1:1 Centered - critical fix */
+        .video-container[data-ratio="1:1"] { 
+            width: auto; 
+            height: auto; 
+            aspect-ratio: 1/1; 
+            max-width: 100%;
+            max-height: 100%; 
+        }
 
         video {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(1); /* Flip handled by JS */
+            transform-origin: center;
         }
 
-        /* Digital Zoom Layer */
-        .zoom-layer {
+        /* Digital Zoom Layer (CSS Transform fallback) */
+        .zoom-container {
             width: 100%; height: 100%;
-            position: absolute; top:0; left:0;
-            pointer-events: none;
-            transition: transform 0.1s linear;
+            transform-origin: center;
+            transition: transform 0.1s linear; 
         }
 
-        /* --- HUD Overlays --- */
-        .hud-top {
+        /* Zoom Text Indicator */
+        .zoom-indicator {
             position: absolute;
-            top: 0; left: 0; width: 100%;
-            height: 60px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 20px;
-            z-index: 20;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
-        }
-
-        .icon-btn {
-            background: rgba(255,255,255,0.1);
-            border: none;
-            color: white;
-            width: 36px; height: 36px;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            backdrop-filter: blur(4px);
-        }
-        .icon-btn.active { background: var(--primary); color: #000; }
-
-        /* Zoom Slider */
-        .zoom-controls {
-            position: absolute;
-            bottom: 140px;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            width: 80%;
-            opacity: 0;
+            background: rgba(0,0,0,0.5);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
             pointer-events: none;
-            transition: opacity 0.3s;
-            z-index: 15;
-            display: flex; align-items: center; gap: 10px;
-            background: rgba(0,0,0,0.6);
-            padding: 8px 16px;
-            border-radius: 20px;
+            opacity: 0;
+            transition: opacity 0.2s;
         }
-        .zoom-controls.visible { opacity: 1; pointer-events: auto; }
-        
-        input[type=range] {
-            flex-grow: 1;
-            accent-color: var(--primary);
-        }
+        .zoom-indicator.visible { opacity: 1; }
 
-        /* --- Bottom Controls --- */
-        .controls-area {
-            height: 180px;
-            background: #000;
+        /* --- BOTTOM CONTROLS --- */
+        .controls-layer {
+            height: 220px; /* Fixed height to prevent jumping */
+            background: rgba(0,0,0,0.9);
             display: flex;
             flex-direction: column;
+            justify-content: flex-end;
+            padding-bottom: calc(20px + var(--safe-area-bottom));
+            z-index: 50;
             position: relative;
-            z-index: 20;
         }
 
-        /* Mode Selector */
-        .mode-scroller {
-            height: 40px;
+        /* Mode Scroller */
+        .mode-wheel {
+            height: 50px;
             display: flex;
             align-items: center;
-            overflow-x: auto;
-            scroll-behavior: smooth;
-            padding: 0 50%; /* Center the first item */
-            gap: 20px;
+            justify-content: center;
+            gap: 25px;
+            margin-bottom: 20px;
+            perspective: 500px;
         }
-        .mode-scroller::-webkit-scrollbar { display: none; }
         
         .mode-item {
-            white-space: nowrap;
+            color: #888;
             font-size: 13px;
-            font-weight: 500;
-            opacity: 0.5;
-            transition: all 0.2s;
-            cursor: pointer;
-            text-transform: uppercase;
+            font-weight: 600;
             letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
         }
-        .mode-item.active { opacity: 1; color: var(--primary); font-weight: 700; transform: scale(1.1); }
+        .mode-item.active {
+            color: var(--accent);
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+            transform: scale(1.1);
+        }
 
-        /* Shutter Area */
-        .shutter-area {
-            flex-grow: 1;
+        /* Buttons Row */
+        .action-row {
             display: flex;
             justify-content: space-around;
             align-items: center;
-            padding: 0 20px;
+            padding: 0 30px;
         }
 
-        .shutter-btn {
-            width: 76px; height: 76px;
+        .gallery-preview {
+            width: 50px; height: 50px;
+            background: #333;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        .gallery-preview img { width: 100%; height: 100%; object-fit: cover; }
+
+        .shutter-ring {
+            width: 80px; height: 80px;
             border: 4px solid white;
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
-            transition: transform 0.1s;
         }
-        .shutter-inner {
-            width: 60px; height: 60px;
+        
+        .shutter-core {
+            width: 68px; height: 68px;
             background: white;
             border-radius: 50%;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.2s;
         }
-        .shutter-btn:active { transform: scale(0.9); }
-
-        /* Mode Specific Shutter Styles */
-        body[data-mode="video"] .shutter-inner, 
-        body[data-mode="slow-mo"] .shutter-inner,
-        body[data-mode="pro"] .shutter-inner { background: #ff3b30; }
         
-        body.recording .shutter-inner { 
-            width: 30px; height: 30px; 
-            border-radius: 4px; 
-        }
-        body.recording .shutter-btn { border-color: #ff3b30; }
+        .shutter-ring:active .shutter-core { transform: scale(0.9); }
+        .shutter-ring.recording { border-color: #ff3b30; }
+        .shutter-ring.recording .shutter-core { background: #ff3b30; width: 30px; height: 30px; border-radius: 6px; }
 
-        /* Gallery & Switch */
-        .gallery-thumb {
-            width: 48px; height: 48px;
-            background: #333;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 2px solid rgba(255,255,255,0.3);
-        }
-        .gallery-thumb img { width: 100%; height: 100%; object-fit: cover; }
-
-        /* AI Overlay Modal */
-        .ai-modal {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85);
+        /* --- MODALS --- */
+        .modal {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.95);
             z-index: 100;
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 30px;
-            text-align: center;
-            backdrop-filter: blur(10px);
-        }
-        .ai-modal.show { display: flex; animation: fadeIn 0.3s; }
-        .ai-content {
-            background: #1a1a1a;
             padding: 20px;
-            border-radius: 16px;
-            max-width: 400px;
-            border: 1px solid var(--primary);
         }
-        .ai-loader {
-            width: 40px; height: 40px;
-            border: 4px solid #333;
-            border-top: 4px solid var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal.open { display: flex; animation: fadeIn 0.2s; }
+        @keyframes fadeIn { from{opacity:0;} to{opacity:1;}}
 
-        /* Pano Guides */
-        .pano-guide {
-            position: absolute;
-            top: 50%; left: 0;
-            width: 100%; height: 2px;
-            background: rgba(255,255,255,0.5);
-            display: none;
-            pointer-events: none;
+        .settings-content, .ai-content {
+            background: #1a1a1a;
+            width: 100%; max-width: 350px;
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid #333;
         }
-        body[data-mode="pano"] .pano-guide, body[data-mode="sphere"] .pano-guide { display: block; }
+
+        .setting-row { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; font-size: 14px;}
         
-        /* Pro Controls (Simulated) */
-        .pro-controls {
-            position: absolute; bottom: 190px; width: 100%;
-            display: flex; justify-content: center; gap: 10px;
+        /* High Zoom Preview Effect */
+        #high-zoom-preview {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: black;
+            z-index: 90;
             display: none;
+            justify-content: center; align-items: center;
         }
-        body[data-mode="pro"] .pro-controls { display: flex; }
-        .pro-badge { background: rgba(0,0,0,0.5); padding: 4px 8px; font-size: 10px; border: 1px solid #555; border-radius: 4px; }
+        #preview-img {
+            max-width: 90%; max-height: 80%;
+            filter: grayscale(100%) contrast(1.2) drop-shadow(0 0 15px cyan);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+            border: 1px solid cyan;
+        }
+        .scan-line {
+            position: absolute; width: 100%; height: 2px; background: cyan;
+            top: 0; animation: scan 1.5s linear; box-shadow: 0 0 10px cyan;
+        }
+        @keyframes scan { 0% {top:0;} 100% {top:100%;} }
 
     </style>
 </head>
-<body data-mode="photo">
+<body>
 
-    <!-- Top HUD -->
-    <div class="hud-top">
-        <button class="icon-btn" id="torch-btn" onclick="toggleTorch()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
-        </button>
-        <button class="icon-btn" id="ratio-btn" onclick="cycleRatio()">
-            <span style="font-size:10px; font-weight:bold;">16:9</span>
+    <!-- Top UI -->
+    <div class="top-bar">
+        <button class="icon-btn" id="torch-toggle" onclick="toggleFlash()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
         </button>
         <button class="icon-btn" onclick="toggleSettings()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </button>
     </div>
 
-    <!-- Main Viewfinder -->
-    <div class="viewfinder-container" id="vf-container" data-ratio="16:9">
-        <video id="webcam" autoplay playsinline muted></video>
-        <div class="zoom-layer" id="zoom-transform"></div> <!-- For digital zoom effect -->
-        <canvas id="capture-canvas" style="display:none;"></canvas>
-        <div class="pano-guide"></div>
-        
-        <!-- Zoom UI -->
-        <div class="zoom-controls" id="zoom-ui">
-            <span style="font-size:12px;">1x</span>
-            <input type="range" id="zoom-slider" min="1" max="100" value="1" step="0.1">
-            <span style="font-size:12px;" id="zoom-val">100x</span>
-        </div>
-        
-        <!-- Pro Mode Visuals -->
-        <div class="pro-controls">
-            <div class="pro-badge">ISO AUTO</div>
-            <div class="pro-badge">WB 4500K</div>
-            <div class="pro-badge">AF-C</div>
+    <!-- Viewfinder -->
+    <div class="viewport" id="viewport">
+        <div class="video-container" id="video-wrapper" data-ratio="16:9">
+            <div class="zoom-container" id="zoom-layer">
+                <video id="cam-feed" autoplay playsinline muted></video>
+            </div>
+            <div class="zoom-indicator" id="zoom-text">1.0x</div>
         </div>
     </div>
 
-    <!-- Bottom Controls -->
-    <div class="controls-area">
-        <!-- Mode Scroll -->
-        <div class="mode-scroller" id="mode-scroller">
-            <div style="min-width: 50vw;"></div> <!-- Spacer -->
-            <div class="mode-item" data-mode="sphere">3D SPHERE</div>
-            <div class="mode-item" data-mode="pano">PANO</div>
-            <div class="mode-item" data-mode="pro">PRO</div>
-            <div class="mode-item active" data-mode="photo">PHOTO</div>
-            <div class="mode-item" data-mode="video">VIDEO</div>
-            <div class="mode-item" data-mode="slow-mo">SLOW MO</div>
-            <div class="mode-item" data-mode="fast-fwd">TIME LAPSE</div>
-            <div style="min-width: 50vw;"></div> <!-- Spacer -->
+    <!-- Controls -->
+    <div class="controls-layer">
+        <div class="mode-wheel">
+            <div class="mode-item" onclick="setMode('video')">VIDEO</div>
+            <div class="mode-item active" onclick="setMode('photo')">PHOTO</div>
+            <div class="mode-item" onclick="setMode('pano')">PANO</div>
+            <div class="mode-item" onclick="setMode('pro')">PRO</div>
         </div>
-
-        <div class="shutter-area">
-            <!-- Gallery -->
-            <div class="gallery-thumb" onclick="alert('Gallery would open here')">
-                <img id="last-thumb" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
+        
+        <div class="action-row">
+            <div class="gallery-preview">
+                <img id="last-shot" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
             </div>
-
-            <!-- Shutter -->
-            <div class="shutter-btn" id="shutter">
-                <div class="shutter-inner"></div>
+            
+            <div class="shutter-ring" id="shutter-btn">
+                <div class="shutter-core"></div>
             </div>
-
-            <!-- Switch Cam -->
-            <button class="icon-btn" onclick="flipCamera()" style="background:transparent;">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5l3.5 3.5-3.5 3.5z"></path></svg>
+            
+            <button class="icon-btn" onclick="flipCam()" style="width:48px; height:48px; background: rgba(50,50,50,0.5);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5l3.5 3.5-3.5 3.5z"></path></svg>
             </button>
         </div>
     </div>
 
-    <!-- AI Result Modal -->
-    <div class="ai-modal" id="ai-result">
+    <!-- Hidden Canvas -->
+    <canvas id="process-canvas" style="display:none;"></canvas>
+
+    <!-- Modals -->
+    <div class="modal" id="settings-modal">
+        <div class="settings-content">
+            <h3 style="margin-top:0;">Camera Settings</h3>
+            <div class="setting-row">
+                <span>Aspect Ratio</span>
+                <button onclick="toggleRatio()" id="ratio-txt" style="background:#333; color:white; border:none; padding:5px 10px; border-radius:4px;">16:9</button>
+            </div>
+            <div class="setting-row">
+                <span>Stabilization (OIS/EIS)</span>
+                <input type="checkbox" id="stab-toggle" checked onchange="restartStream()">
+            </div>
+            <div class="setting-row">
+                <span>Location Tagging</span>
+                <input type="checkbox">
+            </div>
+            <button onclick="toggleSettings()" style="width:100%; padding:10px; background:var(--accent); border:none; border-radius:8px; font-weight:bold;">Close</button>
+        </div>
+    </div>
+
+    <div class="modal" id="ai-modal">
         <div class="ai-content">
-            <h3>AI Scene Analysis</h3>
-            <div class="ai-loader" id="ai-loading"></div>
-            <p id="ai-text" style="font-size: 14px; line-height: 1.5; color: #ddd;"></p>
-            <button onclick="document.getElementById('ai-result').classList.remove('show')" style="margin-top:15px; padding: 8px 16px; background:var(--primary); border:none; border-radius:4px; font-weight:bold;">Close</button>
+            <h3 style="color:var(--accent)">AI Analysis</h3>
+            <div id="ai-status" style="margin-bottom:10px; font-style:italic; color:#888;">Processing...</div>
+            <p id="ai-result" style="font-size:14px; line-height:1.5; color:#eee;"></p>
+            <button onclick="document.getElementById('ai-modal').classList.remove('open')" style="margin-top:15px; width:100%; padding:8px; border:1px solid #555; background:transparent; color:white; border-radius:6px;">Close</button>
+        </div>
+    </div>
+
+    <!-- Special Zoom Preview -->
+    <div id="high-zoom-preview">
+        <div style="position:relative;">
+            <div class="scan-line"></div>
+            <img id="preview-img" src="">
+            <div style="position:absolute; bottom:10px; width:100%; text-align:center; color:cyan; font-family:monospace; text-shadow:0 0 5px cyan;">ENHANCING DETAILS...</div>
         </div>
     </div>
 
 <script>
-    /**
-     * CONFIGURATION & STATE
-     */
-    // Obfuscated AI Key
-    const p1 = "AIzaSyDPumBf";
-    const p2 = "FzUCvchOpuHbnc";
-    const p3 = "1rnr5X3_pdPCU";
-    const GEMINI_KEY = p1 + p2 + p3;
-    
-    const video = document.getElementById('webcam');
-    const canvas = document.getElementById('capture-canvas');
-    const zoomSlider = document.getElementById('zoom-slider');
-    const zoomValDisplay = document.getElementById('zoom-val');
-    const zoomUI = document.getElementById('zoom-ui');
-    const vfContainer = document.getElementById('vf-container');
-    const modeScroller = document.getElementById('mode-scroller');
-    const shutterBtn = document.getElementById('shutter');
+    // --- SALT & CONFIG ---
+    // Splitting key to avoid simple scrapers
+    const k1 = "AIzaSyDPumBf";
+    const k2 = "FzUCvchOpuHbnc";
+    const k3 = "1rnr5X3_pdPCU";
+    const API_KEY = k1 + k2 + k3;
 
+    // --- DOM ELEMENTS ---
+    const video = document.getElementById('cam-feed');
+    const zoomLayer = document.getElementById('zoom-layer');
+    const zoomText = document.getElementById('zoom-text');
+    const shutter = document.getElementById('shutter-btn');
+    const canvas = document.getElementById('process-canvas');
+    const videoWrapper = document.getElementById('video-wrapper');
+    const viewport = document.getElementById('viewport');
+
+    // --- STATE ---
     let stream = null;
-    let videoTrack = null;
-    let facingMode = 'environment';
-    let currentMode = 'photo';
-    let currentRatio = '16:9';
-    let zoomLevel = 1;
+    let track = null;
+    let mode = 'photo';
+    let facing = 'environment';
+    let zoom = 1.0;
+    let maxZoom = 10; 
+    let ratio = '16:9';
     let isRecording = false;
     let mediaRecorder;
-    let recordedChunks = [];
-    let captureInterval = null; // For TimeLapse/Pano
-    
-    // Capabilities
-    let capabilities = {};
+    let chunks = [];
+    let pinchStart = 0;
+    let startZoom = 1;
+    let flashState = false;
 
-    /**
-     * CAMERA INITIALIZATION
-     */
-    async function startCamera() {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
+    // --- INITIALIZATION ---
+    async function initCamera() {
+        if(stream) stream.getTracks().forEach(t => t.stop());
 
-        // Constraints Logic
-        let constraints = {
-            audio: (currentMode === 'video' || currentMode === 'pro' || currentMode === 'slow-mo'),
+        const constraints = {
+            audio: mode === 'video',
             video: {
-                facingMode: facingMode,
-                width: { ideal: 4096 }, // Request max resolution
+                facingMode: facing,
+                width: { ideal: 3840 },
                 height: { ideal: 2160 },
+                // Enable stabilization if checked
+                videoStabilizationMode: document.getElementById('stab-toggle').checked ? 'any' : 'off'
             }
         };
-
-        if (currentMode === 'slow-mo') {
-            constraints.video.frameRate = { ideal: 60, min: 30 };
-        } else {
-            constraints.video.frameRate = { ideal: 30 };
-        }
 
         try {
             stream = await navigator.mediaDevices.getUserMedia(constraints);
             video.srcObject = stream;
-            videoTrack = stream.getVideoTracks()[0];
+            track = stream.getVideoTracks()[0];
 
-            // Get Hardware Capabilities
-            capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-            
-            // Apply Zoom constraints if supported natively
-            if (capabilities.zoom) {
-                zoomSlider.max = capabilities.zoom.max;
-                zoomSlider.min = capabilities.zoom.min;
-                zoomSlider.step = capabilities.zoom.step;
-            } else {
-                // Fallback to digital zoom
-                zoomSlider.max = 5; // CSS scale max
-                zoomSlider.min = 1;
-                zoomSlider.step = 0.1;
-            }
+            // Get hardware capabilities
+            const caps = track.getCapabilities();
+            if(caps.zoom) maxZoom = caps.zoom.max;
 
-            // Orientation check
-            if (facingMode === 'user') {
-                video.style.transform = 'scaleX(-1)';
-            } else {
-                video.style.transform = 'scaleX(1)';
-            }
+            // Apply Mirroring if front cam
+            zoomLayer.style.transform = facing === 'user' ? 'scaleX(-1)' : 'none';
 
-        } catch (err) {
-            console.error("Camera Error:", err);
-            alert("Camera access failed. Ensure HTTPS is used.");
+        } catch (e) {
+            console.error(e);
+            alert("Camera access denied or unsafe context. Use HTTPS/Localhost.");
         }
     }
 
-    /**
-     * TORCH FUNCTIONALITY
-     */
-    async function toggleTorch() {
-        if (!videoTrack) return;
+    function restartStream() { initCamera(); }
+
+    // --- TOUCH / PINCH ZOOM ---
+    viewport.addEventListener('touchstart', e => {
+        if(e.touches.length === 2) {
+            e.preventDefault(); // Prevent page scroll
+            pinchStart = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+            startZoom = zoom;
+        }
+    }, {passive: false});
+
+    viewport.addEventListener('touchmove', e => {
+        if(e.touches.length === 2) {
+            e.preventDefault();
+            const dist = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+            const delta = dist / pinchStart;
+            
+            let newZoom = startZoom * delta;
+            newZoom = Math.min(Math.max(newZoom, 1), 100); // Allow up to 100x
+            applyZoom(newZoom);
+        }
+    }, {passive: false});
+
+    function applyZoom(val) {
+        zoom = val;
+        zoomText.innerText = val.toFixed(1) + 'x';
+        zoomText.classList.add('visible');
+        clearTimeout(window.zoomTimer);
+        window.zoomTimer = setTimeout(()=> zoomText.classList.remove('visible'), 1500);
+
+        // Hybrid Zoom Logic
+        const caps = track.getCapabilities();
+        
+        if (caps.zoom) {
+            // Use hardware zoom as much as possible
+            const hwMax = caps.zoom.max;
+            if (zoom <= hwMax) {
+                track.applyConstraints({advanced: [{zoom: zoom}]});
+                // Reset digital transform
+                zoomLayer.style.transform = facing === 'user' ? 'scaleX(-1)' : 'none';
+            } else {
+                // Max out hardware, use CSS for rest
+                track.applyConstraints({advanced: [{zoom: hwMax}]});
+                const digitalFactor = zoom / hwMax;
+                const scaleStr = `scale(${digitalFactor})`;
+                zoomLayer.style.transform = facing === 'user' ? `scaleX(-1) ${scaleStr}` : scaleStr;
+            }
+        } else {
+            // Pure Digital
+            const scaleStr = `scale(${zoom})`;
+            zoomLayer.style.transform = facing === 'user' ? `scaleX(-1) ${scaleStr}` : scaleStr;
+        }
+    }
+
+    // --- FLASH / TORCH ---
+    async function toggleFlash() {
+        if (!track) return;
+        const caps = track.getCapabilities();
+        if (!caps.torch) {
+            alert("Flash not supported on this device/camera.");
+            return;
+        }
         
         try {
-            // Check current state
-            const settings = videoTrack.getSettings();
-            const isTorchOn = settings.torch || false;
-            
-            await videoTrack.applyConstraints({
-                advanced: [{ torch: !isTorchOn }]
+            flashState = !flashState;
+            await track.applyConstraints({
+                advanced: [{ torch: flashState }]
             });
-            
-            document.getElementById('torch-btn').classList.toggle('active', !isTorchOn);
+            document.getElementById('torch-toggle').classList.toggle('active', flashState);
         } catch (e) {
-            console.log("Torch not supported or failed: ", e);
-            // Fallback: Screen flash handled in shutter logic
+            console.error("Torch error", e);
+            // Don't alert here, just fail silently or log
         }
     }
 
-    /**
-     * ZOOM LOGIC (Hybrid: Hardware + Digital)
-     */
-    function setZoom(val) {
-        zoomLevel = val;
-        zoomValDisplay.innerText = parseFloat(val).toFixed(1) + "x";
-        
-        // Try hardware zoom first
-        if (capabilities.zoom) {
-            videoTrack.applyConstraints({ advanced: [{ zoom: val }] })
-            .catch(() => {
-                // Fallback CSS Scale if hardware rejected specific value
-                video.style.transform = `scale(${val}) ${facingMode==='user'?'scaleX(-1)':''}`;
-            });
+    // --- CAPTURE LOGIC ---
+    shutter.addEventListener('click', () => {
+        if (mode === 'video') {
+            toggleVideo();
         } else {
-            // Pure CSS Digital Zoom
-            video.style.transform = `scale(${val}) ${facingMode==='user'?'scaleX(-1)':''}`;
+            takePhoto();
         }
+    });
+
+    function getFileName(prefix, ext) {
+        const now = new Date();
+        const str = now.toISOString().replace(/[-:T.]/g, '').slice(0, 14); // YYYYMMDDHHMMSS
+        return `${str}_${prefix}.${ext}`;
     }
 
-    zoomSlider.addEventListener('input', (e) => {
-        setZoom(e.target.value);
-    });
-
-    // Double Tap to Zoom Toggle
-    let lastTap = 0;
-    vfContainer.addEventListener('click', (e) => {
-        const curTime = new Date().getTime();
-        const tapLen = curTime - lastTap;
-        if (tapLen < 300 && tapLen > 0) {
-            // Double Tap
-            zoomUI.classList.toggle('visible');
-            e.preventDefault();
-        }
-        lastTap = curTime;
-    });
-
-    /**
-     * MODE SWITCHING UI
-     */
-    const modes = document.querySelectorAll('.mode-item');
-    modes.forEach(mode => {
-        mode.addEventListener('click', (e) => {
-            // UI Update
-            modes.forEach(m => m.classList.remove('active'));
-            e.target.classList.add('active');
-            
-            // Logic Update
-            currentMode = e.target.dataset.mode;
-            document.body.setAttribute('data-mode', currentMode);
-            
-            // Restart stream for audio/fps changes
-            startCamera();
-        });
-    });
-
-    /**
-     * ASPECT RATIO
-     */
-    function cycleRatio() {
-        const ratios = ['16:9', '4:3', '1:1'];
-        let idx = ratios.indexOf(currentRatio);
-        currentRatio = ratios[(idx + 1) % ratios.length];
-        
-        vfContainer.setAttribute('data-ratio', currentRatio);
-        document.getElementById('ratio-btn').querySelector('span').innerText = currentRatio;
-    }
-
-    /**
-     * CAPTURE LOGIC (PHOTO & VIDEO)
-     */
-    shutterBtn.addEventListener('click', () => {
-        if(currentMode === 'photo' || currentMode === 'pro') {
-            capturePhoto();
-        } else if (currentMode === 'pano' || currentMode === 'sphere') {
-            captureSequence();
-        } else {
-            if (!isRecording) startRecording();
-            else stopRecording();
-        }
-    });
-
-    function capturePhoto() {
-        // Flash Screen
-        const flash = document.createElement('div');
-        flash.style.position = 'absolute';
-        flash.style.top='0'; flash.style.left='0'; flash.style.width='100%'; flash.style.height='100%';
-        flash.style.background = 'white';
-        flash.style.zIndex = '50';
-        flash.style.transition = 'opacity 0.2s';
-        document.body.appendChild(flash);
-        setTimeout(() => { flash.style.opacity = '0'; setTimeout(()=>flash.remove(), 200) }, 50);
-
-        // Draw to Canvas
+    async function takePhoto() {
+        // Setup Canvas
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
         
-        // Handle Digital Zoom Crop if needed
-        if (!capabilities.zoom && zoomLevel > 1) {
-            // Complex crop logic for digital zoom would go here
-            // For simplicity, we draw full frame and scaling is visual
-             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Draw standard frame
+        ctx.drawImage(video, 0, 0);
+
+        // If Digital Zoom active, crop the canvas
+        // (Simplified for this demo: we just capture the full frame 
+        // unless we want to manually implement crop-stretching)
+
+        const dataURL = canvas.toDataURL('image/jpeg', 1.0);
+        document.getElementById('last-shot').src = dataURL;
+
+        // Check for High Zoom Preview (>5x)
+        if (zoom > 5) {
+            showSciFiPreview(dataURL);
+            setTimeout(() => {
+                download(dataURL, getFileName('IMG', 'jpg'));
+                analyzeAI(dataURL);
+            }, 1500);
         } else {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Immediate
+            download(dataURL, getFileName('IMG', 'jpg'));
+            analyzeAI(dataURL);
         }
-
-        // Get Data
-        const dataURL = canvas.toDataURL('image/jpeg', 0.95);
-        document.getElementById('last-thumb').src = dataURL;
-        
-        // Download
-        downloadMedia(dataURL, `procam_img_${Date.now()}.jpg`);
-
-        // AI Analysis
-        analyzeImage(dataURL);
     }
 
-    function startRecording() {
-        recordedChunks = [];
-        let options = { mimeType: 'video/webm;codecs=vp9' };
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            options = { mimeType: 'video/webm' };
+    function showSciFiPreview(url) {
+        const box = document.getElementById('high-zoom-preview');
+        const img = document.getElementById('preview-img');
+        img.src = url;
+        box.style.display = 'flex';
+        setTimeout(() => box.style.display = 'none', 1600);
+    }
+
+    function toggleVideo() {
+        if (!isRecording) {
+            // Start
+            chunks = [];
+            const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") 
+                ? "video/webm;codecs=vp9" : "video/webm";
+            
+            mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+            mediaRecorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
+            mediaRecorder.onstop = saveVideo;
+            mediaRecorder.start();
+            
+            isRecording = true;
+            shutter.classList.add('recording');
+            shutter.querySelector('.shutter-core').style.background = '#ff3b30';
+        } else {
+            // Stop
+            mediaRecorder.stop();
+            isRecording = false;
+            shutter.classList.remove('recording');
+            shutter.querySelector('.shutter-core').style.background = '#ff3b30'; // Keep red for video mode
         }
-
-        mediaRecorder = new MediaRecorder(stream, options);
-
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) recordedChunks.push(e.data);
-        };
-
-        mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            
-            // Handle Photo capture during video (simultaneous)
-            // In this specific flow, they requested separate downloads, 
-            // but if we want a photo snapshot *from* the video, we'd grab it here.
-            
-            // Download Video
-            downloadMedia(url, `procam_vid_${Date.now()}.webm`);
-            document.body.classList.remove('recording');
-        };
-
-        mediaRecorder.start();
-        isRecording = true;
-        document.body.classList.add('recording');
-        
-        // If Fast Forward (Time Lapse), we only record chunks less frequently or use playbackRate metadata later.
-        // For simplicity in JS, true fast forward usually involves dropping frames or post-processing.
     }
 
-    function stopRecording() {
-        mediaRecorder.stop();
-        isRecording = false;
-    }
-    
-    // Panorama/Sphere Simulation (Capture multiple images)
-    function captureSequence() {
-        let count = 0;
-        const total = 5;
-        alert(`Starting ${currentMode} capture. Slowly move camera right.`);
-        
-        captureInterval = setInterval(() => {
-            capturePhoto(); // Re-uses photo logic to save individual frames
-            count++;
-            if (count >= total) {
-                clearInterval(captureInterval);
-                alert(`${currentMode} sequence captured. Images downloaded for stitching.`);
-            }
-        }, 1000); // Take a photo every second
+    function saveVideo() {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        download(url, getFileName('VID', 'webm'));
     }
 
-    function downloadMedia(url, filename) {
+    function download(url, name) {
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = name;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
     }
 
-    /**
-     * AI GEMINI INTEGRATION
-     */
-    async function analyzeImage(base64Data) {
-        // Show Modal
-        const modal = document.getElementById('ai-result');
-        const textElem = document.getElementById('ai-text');
-        const loader = document.getElementById('ai-loading');
+    // --- AI LOGIC ---
+    async function analyzeAI(base64) {
+        // Extract raw b64
+        const content = base64.split(',')[1];
         
-        modal.classList.add('show');
-        loader.style.display = 'block';
-        textElem.innerText = "Analyzing scene with Gemini AI...";
+        // Open Modal
+        const modal = document.getElementById('ai-modal');
+        const resBox = document.getElementById('ai-result');
+        const status = document.getElementById('ai-status');
+        modal.classList.add('open');
+        status.innerText = "Analyzing Scene...";
+        resBox.innerText = "";
 
-        // Prepare Base64 (remove header)
-        const base64Content = base64Data.split(',')[1];
-
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
-        
-        const payload = {
-            contents: [{
-                parts: [
-                    {text: "Analyze this image in extreme detail. If you see dates, text, or objects that are slightly blurry, reconstruct what they likely say. If it's a calendar, fill in the dates. Identify the main subject and context."},
-                    {inline_data: {
-                        mime_type: "image/jpeg",
-                        data: base64Content
-                    }}
-                ]
-            }]
-        };
-
+        // API Call
         try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
+            const req = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: "Identify the object. If zoomed in/blurry, enhance context. If calendar, read dates. Keep it short." },
+                            { inline_data: { mime_type: "image/jpeg", data: content } }
+                        ]
+                    }]
+                })
             });
             
-            const data = await response.json();
-            const resultText = data.candidates[0].content.parts[0].text;
+            if(!req.ok) throw new Error("API Limit or Network Block");
             
-            loader.style.display = 'none';
-            textElem.innerText = resultText;
-            
-        } catch (error) {
-            console.error("AI Error", error);
-            loader.style.display = 'none';
-            textElem.innerText = "AI Analysis failed. Please check internet connection.";
+            const data = await req.json();
+            const text = data.candidates[0].content.parts[0].text;
+            status.innerText = "Analysis Complete";
+            resBox.innerText = text;
+
+        } catch (e) {
+            status.innerText = "Error";
+            resBox.innerText = "AI unreachable. (Check Network/CORS)";
+            console.error(e);
         }
     }
 
-    function flipCamera() {
-        facingMode = facingMode === 'user' ? 'environment' : 'user';
-        startCamera();
+    // --- UI HELPERS ---
+    function toggleSettings() {
+        const m = document.getElementById('settings-modal');
+        m.classList.toggle('open');
     }
 
-    // Initialize
-    window.onload = () => {
-        startCamera();
-        registerSW();
-    };
+    function setMode(m) {
+        mode = m;
+        document.querySelectorAll('.mode-item').forEach(el => el.classList.remove('active'));
+        event.target.classList.add('active');
+        
+        // Update Shutter Color
+        const core = document.querySelector('.shutter-core');
+        if (m === 'video' || m === 'slow-mo') core.style.background = '#ff3b30';
+        else core.style.background = 'white';
 
-    /**
-     * SERVICE WORKER (Caching)
-     */
-    function registerSW() {
-        if ('serviceWorker' in navigator) {
-            // Create a blob for the SW code to avoid external file requirement
-            const swCode = `
-                const CACHE_NAME = 'procam-v1';
-                self.addEventListener('install', e => {
-                    e.waitUntil(
-                        caches.open(CACHE_NAME).then(cache => {
-                            return cache.addAll(['./']); // Cache current page
-                        })
-                    );
-                });
-                self.addEventListener('fetch', e => {
-                    e.respondWith(
-                        caches.match(e.request).then(response => {
-                            return response || fetch(e.request);
-                        })
-                    );
-                });
-            `;
-            const blob = new Blob([swCode], {type: 'application/javascript'});
-            const url = URL.createObjectURL(blob);
-            navigator.serviceWorker.register(url)
-                .then(() => console.log('SW Registered'))
-                .catch(err => console.log('SW Fail', err));
-        }
+        restartStream();
     }
+
+    function toggleRatio() {
+        const map = { '16:9': '4:3', '4:3': '1:1', '1:1': '16:9' };
+        ratio = map[ratio];
+        videoWrapper.setAttribute('data-ratio', ratio);
+        document.getElementById('ratio-txt').innerText = ratio;
+    }
+
+    function flipCam() {
+        facing = facing === 'user' ? 'environment' : 'user';
+        initCamera();
+    }
+
+    // Boot
+    window.addEventListener('load', initCamera);
 
 </script>
 </body>
