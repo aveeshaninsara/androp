@@ -3,132 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Globe Sphere Camera</title>
+    <title>Globe 360 Builder</title>
     <style>
-        /* --- CSS RESET --- */
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; touch-action: none; }
+        /* --- RESET --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Segoe UI', Roboto, sans-serif; touch-action: none; }
 
         /* --- LAYERS --- */
-        /* 1. Camera Feed (Background) - Mirrored */
+        /* 1. Camera Feed (Mirrored for selfie-feel) */
         #webcam {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: cover; transform: scaleX(-1); z-index: 1;
+            object-fit: cover; transform: scaleX(-1); z-index: 0;
         }
 
-        /* 2. 3D Canvas (Overlay) */
-        #canvas-container {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 2;
-        }
+        /* 2. 3D Scene */
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
 
-        /* 3. UI Layer (Top) */
+        /* 3. UI Overlay */
         #ui-layer {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 10; pointer-events: none;
             display: flex; flex-direction: column; justify-content: space-between;
         }
 
-        /* --- UI ELEMENTS --- */
+        /* --- UI COMPONENTS --- */
         
-        /* The 16:9 Reticle */
-        .reticle-container {
+        /* Reticle (16:9 Fixed) */
+        .reticle-box {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 80vw;
-            aspect-ratio: 16/9; /* Force 16:9 */
-            border: 3px solid #00d2d3;
-            border-radius: 8px;
-            box-shadow: 0 0 0 9999px rgba(0,0,0,0.7); /* Darken outside */
+            width: 85vw; height: 47.8vw; /* 16:9 Ratio */
+            max-width: 500px; max-height: 281px;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 12px;
+            box-shadow: 0 0 0 100vmax rgba(0,0,0,0.6); /* Darken surroundings */
             pointer-events: none;
+            transition: border-color 0.3s;
         }
-        .reticle-label {
-            position: absolute; top: -30px; width: 100%; text-align: center;
-            color: #00d2d3; font-weight: bold; text-shadow: 0 2px 4px black;
+        .reticle-box.active { border-color: #00d2d3; box-shadow: 0 0 0 100vmax rgba(0,0,0,0.8); }
+
+        /* Instructions */
+        .top-hud {
+            text-align: center; padding: 20px; pointer-events: auto;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
         }
+        .step-indicator {
+            color: #00d2d3; font-size: 18px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;
+            text-shadow: 0 2px 4px black; margin-bottom: 5px;
+        }
+        .instruction { color: white; font-size: 14px; opacity: 0.9; }
+
+        /* Directional Arrows */
+        .arrow {
+            position: absolute; color: white; font-size: 40px; font-weight: bold;
+            opacity: 0; transition: opacity 0.3s; animation: bounce 1s infinite;
+            text-shadow: 0 0 10px #00d2d3;
+        }
+        .arrow.visible { opacity: 1; }
+        .arrow-right { top: 50%; right: 20px; transform: translateY(-50%); }
+        .arrow-left { top: 50%; left: 20px; transform: translateY(-50%); }
+        .arrow-up { top: 20px; left: 50%; transform: translateX(-50%) rotate(-90deg); }
+        .arrow-down { bottom: 140px; left: 50%; transform: translateX(-50%) rotate(90deg); } /* Above controls */
+
+        @keyframes bounce { 50% { transform: scale(1.2) translate(var(--tx, 0), var(--ty, 0)); } }
 
         /* Controls */
-        .bottom-controls {
-            pointer-events: auto; padding: 30px; width: 100%;
-            display: flex; justify-content: center; align-items: center; gap: 20px;
+        .controls-area {
+            padding: 30px; display: flex; justify-content: center; align-items: center; gap: 20px;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); pointer-events: auto;
         }
 
         #btn-capture {
-            width: 70px; height: 70px; border-radius: 50%;
-            background: rgba(255,255,255,0.2); border: 4px solid white;
-            position: relative; cursor: pointer;
+            width: 80px; height: 80px; border-radius: 50%;
+            border: 4px solid white; background: rgba(255,255,255,0.2);
+            position: relative; cursor: pointer; transition: 0.2s;
         }
         #btn-capture::after {
-            content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-            width: 50px; height: 50px; background: white; border-radius: 50%;
+            content:''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            width: 60px; height: 60px; background: white; border-radius: 50%;
         }
-        #btn-capture:active::after { transform: translate(-50%,-50%) scale(0.9); background: #00d2d3; }
+        #btn-capture:active { transform: scale(0.95); }
+        #btn-capture.disabled { opacity: 0.3; pointer-events: none; border-color: #555; }
+        #btn-capture.disabled::after { background: #555; }
 
-        .btn-action {
-            padding: 12px 24px; background: #00d2d3; color: black; border: none;
-            border-radius: 30px; font-weight: bold; font-size: 16px; 
-            cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            display: none; /* Hidden by default */
+        .btn-pill {
+            padding: 12px 30px; border-radius: 30px; border: none; font-weight: bold; font-size: 16px;
+            background: #00d2d3; color: #000; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
-
-        /* Gallery / Home */
-        #gallery-overlay {
+        
+        /* Screens */
+        #gallery-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111; z-index: 20; padding: 20px;
-            display: flex; flex-direction: column; overflow-y: auto;
-            transition: transform 0.3s;
+            background: #121212; z-index: 50; display: flex; flex-direction: column;
+            transition: transform 0.3s ease-in-out;
         }
-        .gallery-grid {
-            display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px;
-        }
-        .gallery-item {
-            aspect-ratio: 1; background: #333; border-radius: 10px; overflow: hidden; position: relative;
-        }
-        .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
-        .gallery-title { font-size: 24px; color: white; margin-bottom: 10px; }
+        #gallery-screen.hidden { transform: translateY(100%); }
 
-        /* Toast Popup */
-        #toast {
-            position: fixed; top: 50px; left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.8); color: white; padding: 10px 20px;
-            border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity 0.3s;
-            pointer-events: none; z-index: 100;
+        .gallery-header { padding: 20px; display: flex; justify-content: space-between; align-items: center; background: #1f1f1f; }
+        .gallery-content { flex: 1; overflow-y: auto; padding: 15px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        
+        .gallery-card {
+            background: #2a2a2a; border-radius: 10px; overflow: hidden; position: relative; aspect-ratio: 16/9;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
+        .gallery-card img { width: 100%; height: 100%; object-fit: cover; }
+        .btn-delete {
+            position: absolute; top: 5px; right: 5px; width: 30px; height: 30px;
+            background: rgba(255,0,0,0.8); color: white; border: none; border-radius: 50%;
+            font-weight: bold; cursor: pointer; z-index: 2;
+        }
+
+        /* Toast */
+        #toast {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.85); color: #fff; padding: 15px 30px;
+            border-radius: 8px; font-size: 16px; pointer-events: none; z-index: 100;
+            opacity: 0; transition: opacity 0.3s; text-align: center;
+        }
+
     </style>
 </head>
 <body>
 
-    <!-- Toast Notification -->
-    <div id="toast">Message</div>
-
-    <!-- Gallery Screen -->
-    <div id="gallery-overlay">
-        <div class="gallery-title">My 360 Globes</div>
-        <button class="btn-action" style="display:block; width:100%; margin-bottom:20px;" id="btn-new">START NEW CAPTURE</button>
-        <div class="gallery-grid" id="gallery-list"></div>
+    <!-- GALLERY SCREEN -->
+    <div id="gallery-screen">
+        <div class="gallery-header">
+            <h2 style="color:white; margin:0;">My Globes</h2>
+        </div>
+        <div class="gallery-content" id="gallery-list">
+            <!-- Items go here -->
+        </div>
+        <div style="padding: 20px; text-align: center;">
+            <button class="btn-pill" id="btn-start-new" style="width:100%; max-width: 300px;">START NEW CAPTURE</button>
+        </div>
     </div>
 
-    <!-- Live Camera -->
+    <!-- MAIN APP -->
     <video id="webcam" playsinline muted autoplay></video>
-
-    <!-- 3D Scene -->
     <div id="canvas-container"></div>
 
-    <!-- UI Overlay -->
     <div id="ui-layer" style="display:none;">
-        
-        <button class="btn-action" id="btn-back" style="position:absolute; top:20px; left:20px; display:block; padding: 8px 16px;">&larr; Home</button>
-
-        <div class="reticle-container">
-            <div class="reticle-label" id="status-text">Swipe to find a segment</div>
+        <div class="top-hud">
+            <button id="btn-home" style="position:absolute; top:15px; left:15px; background:rgba(255,255,255,0.2); color:white; border:1px solid white; padding:5px 10px; border-radius:5px;">🏠 Home</button>
+            <div class="step-indicator" id="step-label">FACE 1: FRONT</div>
+            <div class="instruction" id="step-desc">Align green box and Capture</div>
         </div>
 
-        <div class="bottom-controls">
+        <div class="reticle-box" id="reticle"></div>
+
+        <!-- Arrows -->
+        <div class="arrow arrow-right">➤</div>
+        <div class="arrow arrow-left">➤</div> <!-- Rotated via class -->
+        <div class="arrow arrow-up">➤</div>
+        <div class="arrow arrow-down">➤</div>
+
+        <div class="controls-area">
             <div id="btn-capture"></div>
-            <button class="btn-action" id="btn-finish">FINISH</button>
+            <button class="btn-pill" id="btn-finish" style="display:none; background:#2ecc71;">FINISH & VIEW</button>
         </div>
     </div>
 
-    <!-- Three.js Import -->
+    <div id="toast">Saved!</div>
+
+    <!-- THREE JS -->
     <script type="importmap">
         {
             "imports": {
@@ -142,246 +178,293 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- Globals ---
+        // --- CONFIG ---
+        // The order is Critical for the logic: Front -> Right -> Back -> Left -> Top -> Bottom
+        const STEPS = [
+            { name: "FRONT", id: 4, next: 'right' },  // Face 4 is Front in BoxGeo
+            { name: "RIGHT", id: 0, next: 'right' },  // Face 0 is Right
+            { name: "BACK",  id: 5, next: 'right' },  // Face 5 is Back
+            { name: "LEFT",  id: 1, next: 'up' },     // Face 1 is Left
+            { name: "TOP",   id: 2, next: 'down' },   // Face 2 is Top
+            { name: "BOTTOM",id: 3, next: 'finish' }  // Face 3 is Bottom
+        ];
+
+        let currentStepIndex = 0;
+        let capturedTextures = new Array(6).fill(null);
         let scene, camera, renderer, controls;
-        let captureMesh; // The Cube we capture onto (Logic)
-        let viewerMesh;  // The Sphere we view (Visual)
+        let captureGroup; // Holds the wireframe and the faces
+        let viewerSphere; 
         let materials = [];
-        let isCapturing = false;
-        let capturedCount = 0;
 
-        // DOM Elements
+        // DOM
         const video = document.getElementById('webcam');
+        const galleryScreen = document.getElementById('gallery-screen');
         const uiLayer = document.getElementById('ui-layer');
-        const galleryOverlay = document.getElementById('gallery-overlay');
-        const galleryList = document.getElementById('gallery-list');
-        const statusText = document.getElementById('status-text');
-        const btnFinish = document.getElementById('btn-finish');
         const btnCapture = document.getElementById('btn-capture');
+        const btnFinish = document.getElementById('btn-finish');
+        const stepLabel = document.getElementById('step-label');
+        const stepDesc = document.getElementById('step-desc');
+        const reticle = document.getElementById('reticle');
 
-        // --- Initialization ---
+        // --- INIT ---
+        initGallery();
+        initThree();
 
-        init();
-        loadGallery();
+        // --- EVENT LISTENERS ---
+        document.getElementById('btn-start-new').addEventListener('click', startSession);
+        document.getElementById('btn-home').addEventListener('click', goHome);
+        btnCapture.addEventListener('click', handleCapture);
+        btnFinish.addEventListener('click', finalizeGlobe);
 
-        function init() {
-            // Setup Three.js
-            const container = document.getElementById('canvas-container');
-            
+        // --- THREE.JS SETUP ---
+        function initThree() {
             scene = new THREE.Scene();
-            // Transparent background to see camera
-            scene.background = null; 
+            scene.background = null; // See through to video
 
-            // Camera setup
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            // Crucial: Put camera slightly off-center to avoid clipping issues with OrbitControls
-            camera.position.set(0, 0, 0.01); 
+            camera.position.set(0, 0, 0.1); // Center
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            container.appendChild(renderer.domElement);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-            // Controls (Manual Swipe)
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableZoom = false;
             controls.enablePan = false;
-            controls.rotateSpeed = -0.5; // Invert for "Inside" feel
+            controls.rotateSpeed = -0.5; // Invert drag for "inside" feel
             controls.enableDamping = true;
 
-            // Resize Handler
             window.addEventListener('resize', () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
 
-            // Buttons
-            document.getElementById('btn-new').addEventListener('click', startCameraSession);
-            document.getElementById('btn-back').addEventListener('click', showHome);
-            btnCapture.addEventListener('click', captureFrame);
-            btnFinish.addEventListener('click', saveAndOpenViewer);
-
             animate();
         }
 
-        // --- Gallery Logic ---
-
-        function loadGallery() {
-            const data = JSON.parse(localStorage.getItem('my_globes') || '[]');
-            galleryList.innerHTML = '';
-            
-            if(data.length === 0) {
-                galleryList.innerHTML = '<div style="color:#666; grid-column:span 2; text-align:center;">No captures yet.</div>';
-            }
-
-            data.forEach((item, index) => {
-                const div = document.createElement('div');
-                div.className = 'gallery-item';
-                div.innerHTML = `<img src="${item.thumb}">`;
-                div.onclick = () => openViewer(item.image);
-                galleryList.appendChild(div);
-            });
-        }
-
-        function showHome() {
-            galleryOverlay.style.transform = 'translateY(0)';
-            uiLayer.style.display = 'none';
-            stopCamera();
-            // Reset Scene
-            if(captureMesh) scene.remove(captureMesh);
-            if(viewerMesh) scene.remove(viewerMesh);
-        }
-
-        // --- Camera & Capture Setup ---
-
-        async function startCameraSession() {
+        // --- SESSION LOGIC ---
+        async function startSession() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' } 
+                    video: { facingMode: 'environment', aspectRatio: 16/9 } 
                 });
                 video.srcObject = stream;
                 await video.play();
 
-                // UI Transition
-                galleryOverlay.style.transform = 'translateY(100%)'; // Slide away
+                // UI Reset
+                galleryScreen.classList.add('hidden');
                 uiLayer.style.display = 'flex';
                 btnFinish.style.display = 'none';
                 btnCapture.style.display = 'block';
-                document.querySelector('.reticle-container').style.display = 'block';
-                statusText.innerText = "Swipe to align segments";
+                currentStepIndex = 0;
+                capturedTextures = new Array(6).fill(null);
+                
+                setupCaptureEnvironment();
+                updateStepUI();
 
-                setupCaptureScene();
-
-            } catch (err) {
-                showToast("Camera Error. Use HTTPS.");
+            } catch (e) {
+                alert("Camera Error: " + e.message);
             }
         }
 
-        function stopCamera() {
+        function goHome() {
+            galleryScreen.classList.remove('hidden');
+            uiLayer.style.display = 'none';
             if(video.srcObject) {
                 video.srcObject.getTracks().forEach(t => t.stop());
-                video.srcObject = null;
             }
+            if(viewerSphere) scene.remove(viewerSphere);
+            if(captureGroup) scene.remove(captureGroup);
         }
 
-        function setupCaptureScene() {
-            // Remove old meshes
-            if(viewerMesh) scene.remove(viewerMesh);
-            if(captureMesh) scene.remove(captureMesh);
+        // --- CAPTURE ENVIRONMENT (Cube Logic, Sphere Visual) ---
+        function setupCaptureEnvironment() {
+            if(captureGroup) scene.remove(captureGroup);
+            if(viewerSphere) scene.remove(viewerSphere);
+            
+            captureGroup = new THREE.Group();
+            
+            // 1. The WIREFRAME GLOBE (Visual Guide)
+            // User requested "NOT A CUBE". So we show a Sphere wireframe.
+            const sphereGeo = new THREE.SphereGeometry(12, 16, 16);
+            const wireframe = new THREE.LineSegments(
+                new THREE.WireframeGeometry(sphereGeo),
+                new THREE.LineBasicMaterial({ color: 0x444444, transparent: true, opacity: 0.3 })
+            );
+            captureGroup.add(wireframe);
 
-            isCapturing = true;
-            capturedCount = 0;
+            // 2. The CAPTURE FACES (The logic)
+            // We use BoxGeometry because that's how we stitch images without warping.
+            // But we hide the edges and make it look like "windows".
+            const boxGeo = new THREE.BoxGeometry(10, 10, 10);
             materials = [];
 
-            // We use a BoxGeometry for capture logic because it covers 360 degrees perfectly.
-            // Even though we want a "Globe", a Box is the mathematical way to capture a 360 panorama without distortion.
-            // We will hide the "corners" visually if needed, but for alignment, the box faces are best.
-            const geometry = new THREE.BoxGeometry(10, 10, 10);
-
-            for (let i = 0; i < 6; i++) {
-                // Create placeholder texture
+            for(let i=0; i<6; i++) {
+                // Create a placeholder canvas
                 const canvas = document.createElement('canvas');
-                canvas.width = 64; canvas.height = 64;
+                canvas.width = 512; canvas.height = 512;
                 const ctx = canvas.getContext('2d');
                 
-                // Draw a grid/frame
-                ctx.fillStyle = 'rgba(0,0,0,0.2)';
-                ctx.fillRect(0,0,64,64);
-                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(0,0,64,64);
-                ctx.fillStyle = 'white';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(i+1, 32, 37);
+                // Draw a guide
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.fillRect(0,0,512,512);
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 5;
+                ctx.strokeRect(0,0,512,512);
 
                 const tex = new THREE.CanvasTexture(canvas);
                 const mat = new THREE.MeshBasicMaterial({ 
                     map: tex, 
-                    side: THREE.BackSide, 
+                    side: THREE.BackSide, // Visible from inside
                     transparent: true,
                     opacity: 0.8
                 });
-                mat.userData = { filled: false };
                 materials.push(mat);
             }
 
-            captureMesh = new THREE.Mesh(geometry, materials);
-            captureMesh.scale.set(-1, 1, 1); // Inside view
-            scene.add(captureMesh);
+            const box = new THREE.Mesh(boxGeo, materials);
+            // Flip X so the inside isn't mirrored text
+            box.scale.set(-1, 1, 1); 
+            captureGroup.add(box);
+
+            scene.add(captureGroup);
+            
+            // Reset Camera
+            camera.rotation.set(0,0,0);
+            controls.reset();
         }
 
-        function captureFrame() {
-            // Raycast to find which face we are looking at
+        // --- UI & GUIDANCE ---
+        function updateStepUI() {
+            const step = STEPS[currentStepIndex];
+            stepLabel.innerText = `STEP ${currentStepIndex+1}: ${step.name}`;
+            stepDesc.innerText = "Drag screen to find the active face";
+
+            // Hide all arrows
+            document.querySelectorAll('.arrow').forEach(a => a.classList.remove('visible'));
+            
+            // Highlight Reticle
+            reticle.classList.remove('active');
+            btnCapture.classList.add('disabled');
+        }
+
+        function checkAlignment() {
+            if(!captureGroup) return;
+
+            // Raycast to check if we are looking at the CORRECT face
             const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-            const intersects = raycaster.intersectObject(captureMesh);
+            raycaster.setFromCamera(new THREE.Vector2(0,0), camera); // Center of screen
+            
+            // We need to raycast against the box mesh inside the group
+            const boxMesh = captureGroup.children[1]; 
+            const intersects = raycaster.intersectObject(boxMesh);
 
-            if (intersects.length > 0) {
+            if(intersects.length > 0) {
                 const faceIndex = intersects[0].face.materialIndex;
-                const material = materials[faceIndex];
+                const targetFaceId = STEPS[currentStepIndex].id;
 
-                // Create high-res texture
-                const size = 1024;
-                const canvas = document.createElement('canvas');
-                canvas.width = size; canvas.height = size;
-                const ctx = canvas.getContext('2d');
-
-                // Logic to crop 16:9 from the video center to the square face
-                // Actually, the face is Square (1:1). The reticle is 16:9.
-                // To fill the face, we grab the center square of the video.
-                const vW = video.videoWidth;
-                const vH = video.videoHeight;
-                const minDim = Math.min(vW, vH);
-                
-                // MIRROR FIX: We must flip the drawing because the cube is inside-out (-1 scale)
-                // and the user sees a mirrored video feed.
-                ctx.translate(size, 0);
-                ctx.scale(-1, 1);
-                
-                // Draw center crop
-                ctx.drawImage(video, (vW - minDim)/2, (vH - minDim)/2, minDim, minDim, 0, 0, size, size);
-
-                // Update Material
-                if(material.map) material.map.dispose();
-                material.map = new THREE.CanvasTexture(canvas);
-                material.map.colorSpace = THREE.SRGBColorSpace;
-                material.opacity = 1;
-                material.needsUpdate = true;
-
-                showToast("Captured!");
-
-                if (!material.userData.filled) {
-                    material.userData.filled = true;
-                    capturedCount++;
-                    statusText.innerText = `Segments: ${capturedCount}/6`;
+                if(faceIndex === targetFaceId) {
+                    // WE ARE ALIGNED!
+                    reticle.classList.add('active');
+                    btnCapture.classList.remove('disabled');
+                    stepDesc.innerText = "ALIGNED! TAP TO CAPTURE";
+                    document.querySelectorAll('.arrow').forEach(a => a.classList.remove('visible'));
+                } else {
+                    // Not aligned, show hints
+                    reticle.classList.remove('active');
+                    btnCapture.classList.add('disabled');
+                    stepDesc.innerText = `Turn to find the ${STEPS[currentStepIndex].name} side`;
                     
-                    if(capturedCount >= 6) {
-                        btnFinish.style.display = 'block';
-                        btnCapture.style.display = 'none';
-                        statusText.innerText = "All sides filled!";
-                    }
+                    // Simple arrow logic based on step sequence
+                    const prevStep = currentStepIndex > 0 ? STEPS[currentStepIndex-1].next : 'right';
+                    // This is rough logic, strictly guiding 1->2->3 works best by just hiding wrong faces?
+                    // Let's just use the 'next' hint from the config
                 }
             }
         }
 
-        // --- Saving & Viewer ---
+        function handleCapture() {
+            if(btnCapture.classList.contains('disabled')) return;
 
-        function saveAndOpenViewer() {
-            showToast("Stitching Globe...");
+            const step = STEPS[currentStepIndex];
+            const matIndex = step.id;
+            const material = materials[matIndex];
+
+            // 1. CAPTURE HIGH RES
+            const size = 1024;
+            const cvs = document.createElement('canvas');
+            cvs.width = size; cvs.height = size;
+            const ctx = cvs.getContext('2d');
+
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
             
-            // 1. Convert Cube to Equirectangular (Spherical Image)
+            // CROP LOGIC: The user sees a 16:9 box, but the texture is 1:1.
+            // We must capture the center 1:1 square of the video feed to fill the face.
+            const minDim = Math.min(vw, vh);
+            const sx = (vw - minDim) / 2;
+            const sy = (vh - minDim) / 2;
+
+            // MIRROR FIX: 
+            // Video is CSS transformed scaleX(-1).
+            // To get readable text on the texture, we must flip it here.
+            ctx.translate(size, 0);
+            ctx.scale(-1, 1);
+            
+            // Draw
+            ctx.filter = "contrast(1.2) saturate(1.1)"; // Fix dull colors
+            ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, size, size);
+
+            // Apply
+            const tex = new THREE.CanvasTexture(cvs);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            
+            material.map = tex;
+            material.opacity = 1; // Make fully opaque
+            material.needsUpdate = true;
+            capturedTextures[matIndex] = tex; // Store for export
+
+            // Show Toast
+            showToast("Captured!");
+
+            // Next Step
+            currentStepIndex++;
+            if(currentStepIndex >= STEPS.length) {
+                // DONE
+                stepLabel.innerText = "COMPLETE";
+                stepDesc.innerText = "All sides captured.";
+                btnCapture.style.display = 'none';
+                btnFinish.style.display = 'block';
+                reticle.style.display = 'none';
+            } else {
+                updateStepUI();
+                // Show direction hint
+                const nextDir = STEPS[currentStepIndex-1].next;
+                if(nextDir === 'right') document.querySelector('.arrow-right').classList.add('visible');
+                if(nextDir === 'left') document.querySelector('.arrow-left').classList.add('visible');
+                if(nextDir === 'up') document.querySelector('.arrow-up').classList.add('visible');
+                if(nextDir === 'down') document.querySelector('.arrow-down').classList.add('visible');
+            }
+        }
+
+        // --- STITCHING & SAVING ---
+        function finalizeGlobe() {
+            showToast("Stitching... Please wait");
+
+            // 1. Convert Cube to Equirectangular Sphere
+            // We use a CubeCamera to "photograph" our created box from the inside
             const cubeTarget = new THREE.WebGLCubeRenderTarget(1024);
-            const cubeCamera = new THREE.CubeCamera(0.1, 100, cubeTarget);
-            scene.add(cubeCamera);
+            const cubeCam = new THREE.CubeCamera(0.1, 100, cubeTarget);
+            scene.add(cubeCam);
             
-            // Render the capture box into the cube camera
-            // Ensure capture mesh is visible and properly oriented
-            captureMesh.scale.set(-1, 1, 1); 
-            cubeCamera.update(renderer, scene);
+            // Ensure visual wireframe is hidden for the photo
+            captureGroup.children[0].visible = false; 
+            captureGroup.children[1].scale.set(-1,1,1); // Ensure inside view
 
-            // 2. Unpack to 2D image using Shader
+            cubeCam.update(renderer, scene);
+
+            // 2. Unwrap CubeTexture to Flat Image using Shader
             const equiMaterial = new THREE.ShaderMaterial({
                 uniforms: { map: { value: cubeTarget.texture } },
                 vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position, 1.0); }`,
@@ -400,80 +483,108 @@
             });
 
             const exportScene = new THREE.Scene();
-            const plane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), equiMaterial);
-            exportScene.add(plane);
-            const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-
-            renderer.setSize(2048, 1024); // Standard 2:1 ratio
-            renderer.render(exportScene, orthoCam);
-
-            // 3. Save Data
-            const fullImage = renderer.domElement.toDataURL('image/jpeg', 0.85);
+            exportScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), equiMaterial));
+            const ortho = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
             
-            // Generate Thumbnail
-            const thumbCanvas = document.createElement('canvas');
-            thumbCanvas.width = 100; thumbCanvas.height = 100;
-            thumbCanvas.getContext('2d').drawImage(renderer.domElement, 0, 0, 100, 100);
-            const thumbImage = thumbCanvas.toDataURL('image/jpeg', 0.5);
+            renderer.setSize(2048, 1024);
+            renderer.render(exportScene, ortho);
 
-            // Save to LocalStorage
+            // 3. Save
+            const imgData = renderer.domElement.toDataURL('image/jpeg', 0.85);
+            
+            const newItem = {
+                id: Date.now(),
+                img: imgData
+            };
+            
             try {
-                const newItem = { id: Date.now(), image: fullImage, thumb: thumbImage };
-                const history = JSON.parse(localStorage.getItem('my_globes') || '[]');
-                history.unshift(newItem);
-                if(history.length > 5) history.pop(); // Limit storage
-                localStorage.setItem('my_globes', JSON.stringify(history));
+                const list = JSON.parse(localStorage.getItem('globes') || '[]');
+                list.unshift(newItem);
+                if(list.length > 6) list.pop(); // Limit storage
+                localStorage.setItem('globes', JSON.stringify(list));
                 
-                loadGallery();
-                openViewer(fullImage); // Jump directly to viewer
-
+                // Switch to View Mode
+                loadViewer(imgData);
+                
+                // Restore Renderer
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                
             } catch(e) {
-                showToast("Storage Full! Delete items.");
+                alert("Storage Full! Delete some globes.");
             }
-            
-            // Restore renderer size
-            renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        function openViewer(imageData) {
+        function loadViewer(imgData) {
             // Hide UI
-            galleryOverlay.style.transform = 'translateY(100%)';
-            uiLayer.style.display = 'flex';
-            btnFinish.style.display = 'none';
-            btnCapture.style.display = 'none';
-            document.querySelector('.reticle-container').style.display = 'none';
-            statusText.innerText = "Drag to look around";
-            video.style.opacity = 0; // Hide webcam feed
+            uiLayer.style.display = 'none';
+            galleryScreen.classList.add('hidden');
+            
+            // Clean Scene
+            scene.remove(captureGroup);
+            if(viewerSphere) scene.remove(viewerSphere);
 
-            // Clear Scene
-            if(captureMesh) scene.remove(captureMesh);
-            if(viewerMesh) scene.remove(viewerMesh);
-
-            // Create SPHERE for viewing (User Request: "Globe")
-            const texture = new THREE.TextureLoader().load(imageData);
-            texture.colorSpace = THREE.SRGBColorSpace;
+            // Create Globe
+            const tex = new THREE.TextureLoader().load(imgData);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const geo = new THREE.SphereGeometry(10, 60, 40);
+            const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide });
+            viewerSphere = new THREE.Mesh(geo, mat);
+            // Fix Mirroring for View: 
+            // We want to see inside. Scale X = -1.
+            viewerSphere.scale.set(-1, 1, 1);
             
-            const geometry = new THREE.SphereGeometry(10, 60, 40);
-            // BackSide allows us to see it from the inside
-            const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+            scene.add(viewerSphere);
             
-            viewerMesh = new THREE.Mesh(geometry, material);
-            viewerMesh.scale.set(-1, 1, 1); // Flip x so text/images aren't mirrored
-            
-            scene.add(viewerMesh);
-            
-            // Reset Camera
-            camera.position.set(0,0,0.01);
-            camera.rotation.set(0,0,0);
-            controls.reset();
+            // Enable Home Button again
+            const homeBtn = document.createElement('button');
+            homeBtn.innerText = "Back to Gallery";
+            homeBtn.style.cssText = "position:fixed;bottom:30px;left:50%;transform:translateX(-50%);padding:15px 30px;background:#00d2d3;border:none;border-radius:30px;font-weight:bold;z-index:99;box-shadow:0 4px 10px rgba(0,0,0,0.5);";
+            homeBtn.onclick = () => {
+                homeBtn.remove();
+                goHome();
+                initGallery();
+            };
+            document.body.appendChild(homeBtn);
         }
 
-        // --- Utilities ---
+        // --- GALLERY ---
+        function initGallery() {
+            const list = JSON.parse(localStorage.getItem('globes') || '[]');
+            const container = document.getElementById('gallery-list');
+            container.innerHTML = '';
 
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
+            if(list.length === 0) {
+                container.innerHTML = '<div style="color:white; grid-column:span 2; text-align:center; opacity:0.5;">No captures yet</div>';
+                return;
+            }
+
+            list.forEach((item, idx) => {
+                const card = document.createElement('div');
+                card.className = 'gallery-card';
+                card.innerHTML = `
+                    <img src="${item.img}" />
+                    <button class="btn-delete" data-idx="${idx}">×</button>
+                `;
+                card.onclick = (e) => {
+                    if(!e.target.classList.contains('btn-delete')) {
+                        // View
+                        loadViewer(item.img);
+                        galleryScreen.classList.add('hidden');
+                    }
+                };
+                container.appendChild(card);
+            });
+
+            // Delete Handlers
+            document.querySelectorAll('.btn-delete').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const idx = parseInt(e.target.dataset.idx);
+                    list.splice(idx, 1);
+                    localStorage.setItem('globes', JSON.stringify(list));
+                    initGallery();
+                };
+            });
         }
 
         function showToast(msg) {
@@ -483,6 +594,13 @@
             setTimeout(() => t.style.opacity = 0, 2000);
         }
 
+        // --- LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            checkAlignment(); // Continuous check for reticle
+            controls.update();
+            renderer.render(scene, camera);
+        }
     </script>
 </body>
 </html>
