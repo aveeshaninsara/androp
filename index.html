@@ -3,111 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Optical Flow Sphere Camera</title>
+    <title>Sphere Cam</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        
-        /* The main view container */
-        #container { position: relative; width: 100vw; height: 100vh; }
-
-        /* Layers */
-        video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0; }
-        canvas#output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; }
-        #three-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
-        
-        /* UI Layer */
-        #ui {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
-            pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+        /* --- Reset & Base --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { 
+            margin: 0; overflow: hidden; background: #000; font-family: sans-serif; 
+            touch-action: none; /* Prevent scroll on mobile */
         }
 
-        #loading {
+        /* --- Layers --- */
+        /* 1. Video Feed (Bottom) */
+        #webcam {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: 1; transform: scaleX(-1); /* Mirror effect */
+        }
+
+        /* 2. 3D Overlay (Middle) */
+        #canvas-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 2; pointer-events: none; /* Allow touches to pass if needed, but we handle via JS */
+        }
+
+        /* 3. UI (Top) */
+        #ui-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10; pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+
+        /* --- UI Elements --- */
+        .status-bar {
+            background: rgba(0,0,0,0.6); color: white; padding: 10px 20px;
+            text-align: center; font-size: 14px; margin: 20px; border-radius: 20px;
+            backdrop-filter: blur(4px); pointer-events: auto;
+        }
+
+        .center-reticle {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: #00d2d3; font-size: 24px; font-weight: bold; background: rgba(0,0,0,0.8);
-            padding: 20px; border-radius: 10px; z-index: 100; text-align: center;
+            width: 250px; height: 250px;
+            border: 2px dashed rgba(255, 255, 255, 0.8); border-radius: 12px;
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); /* Dim the surroundings */
         }
 
-        .hud-top {
-            margin-top: 20px; text-align: center;
-            background: rgba(0, 0, 0, 0.5); padding: 10px 20px; border-radius: 20px;
-            color: white; pointer-events: auto;
+        .controls {
+            display: flex; justify-content: center; align-items: center; gap: 20px;
+            padding-bottom: 40px; pointer-events: auto; width: 100%;
         }
 
-        /* The Green Capture Button */
-        #btn-capture {
-            width: 80px; height: 80px;
-            background-color: transparent;
-            border: 5px solid #2ecc71;
-            border-radius: 50%;
-            margin-bottom: 40px;
-            cursor: pointer;
-            pointer-events: auto;
-            position: relative;
-            transition: transform 0.1s;
+        /* Buttons */
+        .btn-circle {
+            width: 70px; height: 70px; border-radius: 50%;
+            border: 4px solid white; background: rgba(0,0,0,0.3);
+            position: relative; cursor: pointer; transition: transform 0.1s;
         }
-        #btn-capture::after {
-            content: ''; position: absolute;
-            top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 60px; height: 60px; background: #2ecc71; border-radius: 50%;
+        .btn-circle::after {
+            content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 50px; height: 50px; background: #2ecc71; border-radius: 50%;
         }
-        #btn-capture:active { transform: scale(0.9); }
+        .btn-circle:active { transform: scale(0.9); }
 
-        /* View Mode UI */
-        #view-controls {
-            display: none; pointer-events: auto; position: absolute; bottom: 30px; gap: 20px; z-index: 20;
-        }
-        button.action-btn {
-            background: #3498db; color: white; border: none; padding: 10px 20px;
-            font-size: 16px; border-radius: 5px; cursor: pointer;
+        .btn-rect {
+            padding: 12px 24px; background: #3498db; color: white; border: none;
+            border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
 
-        /* Helper reticle */
-        .reticle {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 200px; height: 200px; border: 2px dashed rgba(255,255,255,0.5);
-            pointer-events: none;
+        /* Intro / Start Screen */
+        #start-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: white; text-align: center; padding: 20px;
         }
-        
-        /* Tracking dots debugging (optional, normally hidden) */
-        .tracking-status { font-size: 12px; color: #aaa; margin-top: 5px; }
+        .loading-spinner {
+            border: 4px solid #333; border-top: 4px solid #3498db;
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        /* Hide elements initially */
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-    <div id="loading">Loading Computer Vision Library...<br><span style="font-size:14px; color:#fff">Please wait (approx 5-10s)</span></div>
+    <!-- Start / Loading Screen -->
+    <div id="start-screen">
+        <div class="loading-spinner" id="loader"></div>
+        <h2 id="status-msg">Loading Computer Vision...</h2>
+        <p style="color:#aaa; font-size: 14px;">(This downloads ~8MB, please wait)</p>
+        <button id="btn-start" class="btn-rect hidden" style="margin-top:20px; font-size:20px; padding:15px 40px;">
+            START CAMERA
+        </button>
+    </div>
 
-    <div id="container">
-        <!-- Hidden source video -->
-        <video id="webcam" playsinline muted autoplay></video>
-        <!-- Canvas for OpenCV processing debugging (hidden visually usually, but keeping for structure) -->
-        <canvas id="output-canvas" style="display:none"></canvas>
-        <!-- ThreeJS overlay -->
-        <div id="three-canvas"></div>
+    <!-- Video Feed -->
+    <video id="webcam" playsinline muted autoplay></video>
 
-        <div id="ui">
-            <div class="hud-top">
-                <div id="msg">Initializing...</div>
-                <div class="tracking-status" id="track-stats">Tracking Points: 0</div>
-            </div>
-            
-            <div class="reticle"></div>
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
 
-            <div id="capture-controls">
-                <div id="btn-capture"></div>
-            </div>
+    <!-- UI Overlay -->
+    <div id="ui-layer" class="hidden">
+        <div class="status-bar" id="tracker-status">Initializing Tracker...</div>
+        
+        <div class="center-reticle"></div>
 
-            <div id="view-controls">
-                <button class="action-btn" id="btn-finish">Finish & View</button>
-                <button class="action-btn" id="btn-reset" style="background:#e74c3c">Reset</button>
-            </div>
+        <div class="controls">
+            <!-- Capture Button -->
+            <div id="btn-capture" class="btn-circle"></div>
+            <!-- Finish Button (Hidden initially) -->
+            <button id="btn-finish" class="btn-rect hidden">VIEW SPHERE</button>
+            <!-- Reload Button (Hidden initially) -->
+            <button id="btn-restart" class="btn-rect hidden" style="background:#e74c3c">NEW</button>
         </div>
     </div>
 
-    <!-- OpenCV.js -->
-    <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady()" type="text/javascript"></script>
-
-    <!-- Three.js Import -->
+    <!-- Libraries -->
+    <!-- 1. OpenCV for Tracking -->
+    <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onCvLoaded()"></script>
+    
+    <!-- 2. Three.js for 3D Sphere -->
     <script type="importmap">
         {
             "imports": {
@@ -121,311 +139,332 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- Global Variables ---
-        let video, threeCanvasContainer;
-        let scene, camera, renderer, cubeMesh, wireframeMesh;
-        let materials = [];
-        let isCapturing = true; // True = Camera Mode, False = View Mode
-        let capturedSegments = 0;
+        // --- Configuration ---
+        const TRACKING_POINTS = 40;
+        const MIN_POINTS = 10;
+        const SENSITIVITY = 0.003; // Adjust mouse rotation speed
 
-        // Tracking Globals
+        // --- Globals ---
+        let video, canvasContainer;
+        let scene, camera, renderer, cubeMesh;
+        let materials = [];
         let cvReady = false;
-        let cap, oldGray, oldPoints, frameGray, p0, p1, st, err;
         let isTracking = false;
-        const maxPoints = 50; // How many points to track
+        let isViewerMode = false;
         
-        // --- Initialization ---
+        // OpenCV Variables
+        let cap, oldGray, frameGray, p0, p1, st, err;
+
+        // State
+        let capturedCount = 0;
+
+        // --- DOM Elements ---
+        const startScreen = document.getElementById('start-screen');
+        const startBtn = document.getElementById('btn-start');
+        const statusMsg = document.getElementById('status-msg');
+        const uiLayer = document.getElementById('ui-layer');
+        const trackerStatus = document.getElementById('tracker-status');
+        const btnCapture = document.getElementById('btn-capture');
+        const btnFinish = document.getElementById('btn-finish');
+        const btnRestart = document.getElementById('btn-restart');
+
+        // --- 1. Initialization ---
         
-        window.onOpenCvReady = function() {
+        window.onCvLoaded = function() {
             cvReady = true;
-            document.getElementById('loading').innerHTML = "Starting Camera...";
-            startCamera();
+            document.getElementById('loader').style.display = 'none';
+            statusMsg.innerText = "System Ready";
+            startBtn.classList.remove('hidden');
         };
 
-        async function startCamera() {
-            video = document.getElementById('webcam');
+        startBtn.addEventListener('click', async () => {
+            startBtn.innerText = "Requesting Access...";
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', width: {ideal: 640}, height: {ideal: 480} },
-                    audio: false
+                // Initialize Video
+                video = document.getElementById('webcam');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }, 
+                    audio: false 
                 });
                 video.srcObject = stream;
+                
+                // Wait for video to actually play data
                 video.onloadedmetadata = () => {
                     video.play();
+                    startScreen.style.display = 'none';
+                    uiLayer.classList.remove('hidden');
                     initThreeJS();
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('msg').innerText = "Look around (Move Slowly)";
-                    // Start Processing Loop
-                    requestAnimationFrame(processVideo);
+                    initTracking();
+                    animate();
                 };
-            } catch (e) {
-                alert("Camera Error: " + e.message);
+            } catch (err) {
+                alert("Camera Error: " + err.message + "\nEnsure you are on HTTPS or Localhost.");
+                startBtn.innerText = "RETRY";
             }
-        }
+        });
 
-        // --- Three.js Setup ---
+        // --- 2. Three.js Setup (The UI/Overlay) ---
 
         function initThreeJS() {
-            threeCanvasContainer = document.getElementById('three-canvas');
+            canvasContainer = document.getElementById('canvas-container');
             
+            // Scene Setup
             scene = new THREE.Scene();
-            // Transparent background so we see the video feed behind
-            scene.background = null; 
+            scene.background = null; // Transparent!
 
-            const aspect = window.innerWidth / window.innerHeight;
-            camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-            // Start inside the cube
-            camera.position.set(0, 0, 0.1); 
+            camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 0, 0.1); // Inside the box
 
             renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            threeCanvasContainer.appendChild(renderer.domElement);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            canvasContainer.appendChild(renderer.domElement);
 
-            // Create the "Globe" (Cube)
-            const geometry = new THREE.BoxGeometry(10, 10, 10);
+            // Create Cube (The "Globe" segments)
+            const geo = new THREE.BoxGeometry(10, 10, 10);
             
-            // Create materials. Initially invisible (transparent) so we see video through them
-            // We add a wireframe helper to see the "slots"
-            for (let i = 0; i < 6; i++) {
+            // Create 6 transparent materials with wireframes
+            for(let i=0; i<6; i++) {
+                // Create a canvas for the label "Face X"
+                const lblCanvas = document.createElement('canvas');
+                lblCanvas.width = 256; lblCanvas.height = 256;
+                const ctx = lblCanvas.getContext('2d');
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                ctx.fillRect(0,0,256,256);
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(0,0,256,256);
+                
+                const tex = new THREE.CanvasTexture(lblCanvas);
+                
                 const mat = new THREE.MeshBasicMaterial({ 
-                    color: 0xffffff, 
-                    side: THREE.BackSide,
+                    map: tex,
                     transparent: true,
-                    opacity: 0.1, // Very faint background
-                    map: null 
+                    opacity: 0.5,
+                    side: THREE.BackSide
                 });
-                mat.userData = { filled: false, id: i };
+                mat.userData = { filled: false, originalTex: tex };
                 materials.push(mat);
             }
 
-            cubeMesh = new THREE.Mesh(geometry, materials);
-            cubeMesh.scale.set(-1, 1, 1); // Invert so we are inside
+            cubeMesh = new THREE.Mesh(geo, materials);
+            cubeMesh.scale.set(-1, 1, 1); // Invert scale for inside view
             scene.add(cubeMesh);
 
-            // Add Wireframe to guide user
-            const wireGeo = new THREE.EdgesGeometry(geometry);
-            const wireMat = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 });
-            wireframeMesh = new THREE.LineSegments(wireGeo, wireMat);
-            wireframeMesh.scale.set(-1, 1, 1);
-            scene.add(wireframeMesh);
+            // Resize Handler
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
 
-            // UI Listeners
-            document.getElementById('btn-capture').addEventListener('click', captureFace);
-            document.getElementById('btn-finish').addEventListener('click', finishAndSave);
-            document.getElementById('btn-reset').addEventListener('click', () => location.reload());
+            // Button Listeners
+            btnCapture.addEventListener('click', captureSegment);
+            btnFinish.addEventListener('click', finishAndSave);
+            btnRestart.addEventListener('click', () => location.reload());
         }
 
-        // --- Optical Flow Tracking (The "Fake Gyro") ---
+        // --- 3. OpenCV Tracking (The "Gyro") ---
 
         function initTracking() {
-            if (!cvReady) return;
+            // Setup Matrices
+            const width = video.videoWidth;
+            const height = video.videoHeight;
             
-            // OpenCV mat setup
             cap = new cv.VideoCapture(video);
-            oldGray = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC1);
-            frameGray = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC1);
-            
-            p0 = new cv.Mat(); // Previous points
-            p1 = new cv.Mat(); // Current points
-            st = new cv.Mat(); // Status
-            err = new cv.Mat(); // Error
+            oldGray = new cv.Mat(height, width, cv.CV_8UC1);
+            frameGray = new cv.Mat(height, width, cv.CV_8UC1);
+            p0 = new cv.Mat();
+            p1 = new cv.Mat();
+            st = new cv.Mat();
+            err = new cv.Mat();
 
-            // Take first frame
+            // Initial Capture
             cap.read(oldGray);
             cv.cvtColor(oldGray, oldGray, cv.COLOR_RGBA2GRAY);
-
-            // Find initial features to track
-            findNewFeatures(oldGray);
+            
+            // Find Initial Features
+            detectFeatures();
             isTracking = true;
         }
 
-        function findNewFeatures(grayMat) {
+        function detectFeatures() {
+            // Identify corners to track
             let none = new cv.Mat();
-            // goodFeaturesToTrack(image, outputPoints, maxCorners, qualityLevel, minDistance)
-            cv.goodFeaturesToTrack(grayMat, p0, maxPoints, 0.3, 7, none);
+            cv.goodFeaturesToTrack(oldGray, p0, TRACKING_POINTS, 0.3, 7, none, 3, false, 0.04);
             none.delete();
+            trackerStatus.innerText = "Tracking Object...";
+            trackerStatus.style.color = "#2ecc71"; // Green
         }
 
-        function processVideo() {
-            if (!video || video.paused || video.ended) {
-                requestAnimationFrame(processVideo);
-                return;
-            }
-
-            if (!isTracking) {
-                initTracking();
-                requestAnimationFrame(processVideo);
-                return;
-            }
-
-            if(!isCapturing) {
-                // If in view mode, just render scene
-                renderer.render(scene, camera);
-                requestAnimationFrame(processVideo);
-                return;
-            }
+        function processTracking() {
+            if (!isTracking || isViewerMode) return;
 
             try {
-                let frame = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
-                cap.read(frame);
-                cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
+                // Read new frame
+                cap.read(frameGray);
+                cv.cvtColor(frameGray, frameGray, cv.COLOR_RGBA2GRAY);
 
-                // Calculate Optical Flow (Lucas-Kanade)
+                // If we have points, calculate flow
                 if (p0.rows > 0) {
                     let winSize = new cv.Size(15, 15);
                     let maxLevel = 2;
                     let criteria = new cv.TermCriteria(cv.TermCriteria_EPS | cv.TermCriteria_COUNT, 10, 0.03);
                     
+                    // Optical Flow
                     cv.calcOpticalFlowPyrLK(oldGray, frameGray, p0, p1, st, err, winSize, maxLevel, criteria);
 
-                    // Calculate average movement
+                    // Calculate Movement
                     let dx = 0, dy = 0, count = 0;
-                    let goodNew = [];
                     
-                    for (let i = 0; i < st.rows; i++) {
-                        if (st.data[i] === 1) {
-                            // Point found
-                            goodNew.push(i);
-                            let x0 = p0.data32F[i*2];
-                            let y0 = p0.data32F[i*2+1];
-                            let x1 = p1.data32F[i*2];
-                            let y1 = p1.data32F[i*2+1];
+                    // Create new array of healthy points
+                    let goodPoints = [];
 
+                    for (let i = 0; i < st.rows; i++) {
+                        if (st.data[i] === 1) { // 1 = Found
+                            const x0 = p0.data32F[i*2];
+                            const y0 = p0.data32F[i*2+1];
+                            const x1 = p1.data32F[i*2];
+                            const y1 = p1.data32F[i*2+1];
+
+                            // Simple Delta
                             dx += (x1 - x0);
                             dy += (y1 - y0);
                             count++;
+                            
+                            // Keep point for next frame
+                            goodPoints.push(x1);
+                            goodPoints.push(y1);
                         }
                     }
 
-                    document.getElementById('track-stats').innerText = `Tracking: ${count} points`;
-
-                    // Apply Rotation to Camera (Fake Gyro)
+                    // Apply to Camera (Invert Logic for "Looking Around")
                     if (count > 0) {
                         dx /= count;
                         dy /= count;
-
-                        // Sensitivity Multiplier (Tune this for feel)
-                        const sensitivity = 0.002; 
                         
-                        // Invert logic: If pixels move left, camera turned right
-                        camera.rotation.y -= dx * sensitivity; 
-                        camera.rotation.x -= dy * sensitivity;
+                        camera.rotation.y -= dx * SENSITIVITY;
+                        camera.rotation.x -= dy * SENSITIVITY;
                     }
 
-                    // Replenish points if too few
-                    if (count < 10) {
-                        findNewFeatures(frameGray);
+                    // Check Object Handover
+                    if (count < MIN_POINTS) {
+                        trackerStatus.innerText = "Acquiring New Features...";
+                        trackerStatus.style.color = "yellow";
+                        detectFeatures(); // Re-scan full frame for new objects
                     } else {
-                        // Swap p1 to p0 for next frame
-                        // We need to copy valid points from p1 to p0
-                        // For performance in JS, easier to just re-detect if count gets low, 
-                        // but technically we should compact the arrays. 
-                        // Simpler approach: simply update p0 with p1's data directly
-                        p1.copyTo(p0);
+                        // Update p0 with p1 data manually
+                        // We recreate p0 from the good points to keep memory clean
+                        p0.delete(); 
+                        p0 = new cv.Mat(goodPoints.length / 2, 1, cv.CV_32FC2);
+                        for(let i=0; i<goodPoints.length; i++) {
+                            p0.data32F[i] = goodPoints[i];
+                        }
                     }
+
                 } else {
-                    findNewFeatures(frameGray);
+                    detectFeatures();
                 }
 
+                // Swap frames
                 frameGray.copyTo(oldGray);
-                frame.delete();
 
-            } catch (err) {
-                console.log(err);
-                // Reset tracking on error
-                isTracking = false;
+            } catch (e) {
+                console.error("Tracking Error:", e);
+                // Fail-safe: try to re-init if crash
+                detectFeatures(); 
             }
-
-            renderer.render(scene, camera);
-            requestAnimationFrame(processVideo);
         }
 
-        // --- Capture Logic ---
+        // --- 4. Capture & Storage ---
 
-        function captureFace() {
-            // 1. Determine which face we are looking at
+        function captureSegment() {
+            // Raycast to find which face we are facing
             const raycaster = new THREE.Raycaster();
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
             const intersects = raycaster.intersectObject(cubeMesh);
 
             if (intersects.length > 0) {
                 const faceIndex = intersects[0].face.materialIndex;
-                const material = materials[faceIndex];
+                const mat = materials[faceIndex];
 
-                // 2. Capture Frame
-                const canvas = document.createElement('canvas');
-                // Use a power of 2 size
+                // Capture high-res square from video
                 const size = 1024;
-                canvas.width = size; 
-                canvas.height = size;
+                const canvas = document.createElement('canvas');
+                canvas.width = size; canvas.height = size;
                 const ctx = canvas.getContext('2d');
 
-                // Crop the center square of video
                 const vW = video.videoWidth;
                 const vH = video.videoHeight;
-                const minDim = Math.min(vW, vH);
-                const sX = (vW - minDim) / 2;
-                const sY = (vH - minDim) / 2;
-
-                // Important: The cube faces are mirrored (inside view). 
-                // We need to flip the image horizontally to match the "mirror"
+                const min = Math.min(vW, vH);
+                
+                // Mirror logic to match CSS mirror
                 ctx.translate(size, 0);
                 ctx.scale(-1, 1);
-                ctx.drawImage(video, sX, sY, minDim, minDim, 0, 0, size, size);
-
-                // 3. Apply Texture
-                const tex = new THREE.CanvasTexture(canvas);
-                tex.colorSpace = THREE.SRGBColorSpace;
                 
-                material.map = tex;
-                material.opacity = 1.0; // Make opaque
-                material.needsUpdate = true;
+                // Center crop
+                ctx.drawImage(video, (vW-min)/2, (vH-min)/2, min, min, 0, 0, size, size);
 
-                // 4. Update UI
-                if(!material.userData.filled) {
-                    material.userData.filled = true;
-                    capturedSegments++;
-                }
+                // Update Texture
+                if(mat.map) mat.map.dispose();
+                mat.map = new THREE.CanvasTexture(canvas);
+                mat.map.colorSpace = THREE.SRGBColorSpace;
+                mat.opacity = 1; 
+                mat.needsUpdate = true;
 
-                document.getElementById('msg').innerText = `Captured! (${capturedSegments}/6)`;
-                
-                // Visual Flash
+                // Flash Effect
                 const flash = document.createElement('div');
-                flash.style.position = 'fixed'; flash.style.top=0; flash.style.left=0; flash.style.width='100%'; flash.style.height='100%';
-                flash.style.background = 'white'; flash.style.zIndex = 999;
+                flash.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:999;transition:opacity 0.2s;";
                 document.body.appendChild(flash);
-                setTimeout(()=>flash.remove(), 100);
+                setTimeout(() => flash.style.opacity = 0, 50);
+                setTimeout(() => flash.remove(), 250);
 
-                // Show Finish button if user has at least captured something
-                if(capturedSegments > 0) {
-                    document.getElementById('view-controls').style.display = 'flex';
-                    document.getElementById('capture-controls').style.display = 'none'; // Optional: hide capture until done? Or keep allow retake.
-                    // Let's keep capture button unless fully done, but show finish button
-                    document.getElementById('capture-controls').style.display = 'block';
+                if (!mat.userData.filled) {
+                    mat.userData.filled = true;
+                    capturedCount++;
+                    trackerStatus.innerText = `Captured ${capturedCount}/6`;
+                    if (capturedCount >= 1) {
+                        btnFinish.classList.remove('hidden');
+                    }
                 }
             }
         }
 
-        // --- Finish & Local Storage ---
-
         function finishAndSave() {
-            isCapturing = false;
-            document.getElementById('msg').innerText = "Processing...";
-            document.getElementById('ui').style.pointerEvents = 'none';
-
-            // 1. Render the CubeMap to a single Equirectangular image
-            // We use a CubeCamera to capture our scene
-            const cubeRTarget = new THREE.WebGLCubeRenderTarget(1024);
-            const cubeCam = new THREE.CubeCamera(0.1, 100, cubeRTarget);
+            if(!confirm("Finish and view sphere?")) return;
             
-            // Hide wireframe for export
-            wireframeMesh.visible = false;
+            // Disable tracking
+            isViewerMode = true;
+            trackerStatus.innerText = "Processing...";
+            
+            // 1. Generate Equirectangular Image
+            // We hide the mesh temporarily to render the SCENE (which is just the box)
+            // But actually we want to render the BOX.
+            // Setup CubeCamera
+            const cubeTarget = new THREE.WebGLCubeRenderTarget(1024);
+            const cubeCam = new THREE.CubeCamera(0.1, 100, cubeTarget);
             scene.add(cubeCam);
+            
+            // Ensure mesh is visible and solid
+            cubeMesh.scale.set(1, 1, 1); // Reset scale for external viewing capture
+            // We need to render FROM THE CENTER, looking at the box faces.
+            // The box faces are at distances.
+            
+            // Actually, simplest way: Just use the materials we have.
+            // But we need to stitch them. 
+            // Let's use the shader approach.
+            
+            // Render the INSIDE of the box to the CubeCamera
+            cubeMesh.scale.set(-1, 1, 1); // Ensure it's inside-out
             cubeCam.update(renderer, scene);
             
-            // Shader to unwrap Cube -> Equirectangular
+            // Shader to unwrap
             const equiMat = new THREE.ShaderMaterial({
-                uniforms: { map: { value: cubeRTarget.texture } },
+                uniforms: { map: { value: cubeTarget.texture } },
                 vertexShader: `
                     varying vec2 vUv;
                     void main() { vUv = uv; gl_Position = vec4(position, 1.0); }
@@ -448,72 +487,69 @@
                 `,
                 side: THREE.DoubleSide
             });
-
-            // Render to a flat texture
+            
             const exportScene = new THREE.Scene();
             const plane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), equiMat);
             exportScene.add(plane);
-            const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+            const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
             
-            renderer.setSize(2048, 1024); // Reasonable size for LocalStorage
-            renderer.render(exportScene, orthoCam);
-
-            // 2. Save to LocalStorage
+            renderer.setSize(2048, 1024);
+            renderer.render(exportScene, ortho);
+            
+            // Save to LocalStorage
             try {
-                const dataUrl = renderer.domElement.toDataURL('image/jpeg', 0.8);
-                localStorage.setItem('sphere_capture_data', dataUrl);
-                alert("Sphere saved to Local Storage!");
-                startViewerMode(dataUrl);
-            } catch (e) {
-                alert("Storage Error (Image too big): " + e);
+                const data = renderer.domElement.toDataURL('image/jpeg', 0.85);
+                localStorage.setItem('savedSphere', data);
+                enterViewerMode(data);
+            } catch(e) {
+                alert("Image too large for storage on this device.");
+                enterViewerMode(renderer.domElement.toDataURL()); // Try anyway
             }
         }
 
-        function startViewerMode(dataUrl) {
-            // Clear current scene
-            while(scene.children.length > 0){ 
-                scene.remove(scene.children[0]); 
-            }
+        function enterViewerMode(dataUrl) {
+            // UI Updates
+            btnCapture.classList.add('hidden');
+            btnFinish.classList.add('hidden');
+            btnRestart.classList.remove('hidden');
+            document.querySelector('.center-reticle').classList.add('hidden');
+            trackerStatus.innerText = "Viewer Mode - Drag to Look";
+            video.style.display = 'none'; // Hide webcam
             
-            // Switch to Viewer UI
-            document.getElementById('ui').style.pointerEvents = 'auto';
-            document.getElementById('capture-controls').style.display = 'none';
-            document.getElementById('view-controls').style.display = 'none'; // Hide finish btn
-            document.getElementById('msg').innerText = "Viewer Mode - Drag to Pan";
-            document.getElementById('track-stats').style.display = 'none';
-            document.getElementById('three-canvas').style.pointerEvents = 'auto'; // Enable drag
-
-            // Stop Camera
-            video.pause();
-            video.srcObject.getTracks().forEach(track => track.stop());
-
-            // Reset Renderer size
+            // Reset Scene for viewing
+            scene.remove(cubeMesh);
+            scene.background = new THREE.Color('#111');
             renderer.setSize(window.innerWidth, window.innerHeight);
-            scene.background = new THREE.Color(0x111111);
-
-            // Create Sphere with saved image
-            const texture = new THREE.TextureLoader().load(dataUrl);
-            texture.colorSpace = THREE.SRGBColorSpace;
-            const geometry = new THREE.SphereGeometry(10, 60, 40);
-            const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
-            const sphere = new THREE.Mesh(geometry, material);
-            // Fix orientation for sphere
+            
+            // Load Sphere
+            const tex = new THREE.TextureLoader().load(dataUrl);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const sphGeo = new THREE.SphereGeometry(10, 60, 40);
+            const sphMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide });
+            const sphere = new THREE.Mesh(sphGeo, sphMat);
             sphere.scale.set(-1, 1, 1);
             scene.add(sphere);
-
-            // Orbit Controls for viewing
+            
+            // Enable Touch Controls
             camera.position.set(0,0,0.1);
+            camera.rotation.set(0,0,0);
             const controls = new OrbitControls(camera, renderer.domElement);
             controls.enableZoom = false;
-            controls.enablePan = false;
-            controls.rotateSpeed = -0.5; // Invert for "inside" feel
+            controls.rotateSpeed = -0.5;
             
-            // Render loop for viewer
-            renderer.setAnimationLoop(() => {
-                controls.update();
-                renderer.render(scene, camera);
-            });
+            // Stop OpenCV
+            isTracking = false;
+            cap.delete(); p0.delete(); p1.delete();
+            
+            // Animation Loop handles the rest
         }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            processTracking();
+            renderer.render(scene, camera);
+        }
+
     </script>
 </body>
 </html>
