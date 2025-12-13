@@ -3,553 +3,589 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sphere Cam</title>
+    <title>360 Sphere Cam</title>
     <style>
-        /* --- Reset & Base --- */
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { 
-            margin: 0; overflow: hidden; background: #000; font-family: sans-serif; 
-            touch-action: none; /* Prevent scroll on mobile */
+        /* --- CORE STYLES --- */
+        :root { --primary: #00d2d3; --bg: #111; --surface: #222; --danger: #ff6b6b; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { margin: 0; background: var(--bg); color: white; overflow: hidden; touch-action: none; }
+
+        /* --- LAYERS --- */
+        #video-feed { position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 0; opacity: 0; transition: opacity 0.5s; }
+        #three-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+        
+        /* --- SCREENS (Gallery vs Camera) --- */
+        .screen { position: absolute; top:0; left:0; width:100%; height:100%; background: var(--bg); display: flex; flex-direction: column; transition: transform 0.3s ease; pointer-events: auto; z-index: 20; }
+        .screen.hidden { transform: translateY(100%); pointer-events: none; }
+        
+        /* --- GALLERY --- */
+        #gallery-screen { padding: 20px; overflow-y: auto; }
+        .gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; }
+        .gallery-item { background: var(--surface); border-radius: 12px; overflow: hidden; position: relative; aspect-ratio: 1; box-shadow: 0 4px 10px rgba(0,0,0,0.5); cursor: pointer; }
+        .gallery-item img { width: 100%; height: 100%; object-fit: cover; opacity: 0.7; }
+        .gallery-item:hover img { opacity: 1; }
+        .gallery-date { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.7); font-size: 10px; padding: 5px; text-align: center; }
+        .delete-btn { position: absolute; top: 5px; right: 5px; background: rgba(255,0,0,0.8); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-weight: bold; cursor: pointer; z-index: 5; }
+        
+        .empty-msg { text-align: center; color: #666; margin-top: 50px; }
+        
+        #btn-new {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: var(--primary); color: #000; border: none; padding: 15px 40px;
+            border-radius: 30px; font-weight: bold; font-size: 18px; box-shadow: 0 4px 15px rgba(0,210,211,0.4);
+            cursor: pointer; z-index: 30; display: flex; align-items: center; gap: 10px;
         }
 
-        /* --- Layers --- */
-        /* 1. Video Feed (Bottom) */
-        #webcam {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: cover; z-index: 1; transform: scaleX(-1); /* Mirror effect */
-        }
+        /* --- CAMERA UI --- */
+        .top-bar { position: absolute; top: 0; left: 0; width: 100%; padding: 15px; display: flex; justify-content: space-between; align-items: center; pointer-events: auto; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); }
+        
+        /* Mode Toggle */
+        .toggle-switch { display: flex; background: rgba(255,255,255,0.2); border-radius: 20px; padding: 2px; position: relative; }
+        .toggle-btn { padding: 6px 12px; font-size: 12px; border: none; background: transparent; color: white; border-radius: 18px; cursor: pointer; z-index: 2; transition: color 0.2s; }
+        .toggle-btn.active { color: black; font-weight: bold; }
+        .slider { position: absolute; top: 2px; left: 2px; width: 50%; height: calc(100% - 4px); background: var(--primary); border-radius: 18px; transition: transform 0.2s; z-index: 1; }
+        
+        .reticle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70vw; height: 70vw; max-width: 300px; max-height: 300px; border: 2px dashed rgba(255,255,255,0.6); border-radius: 12px; pointer-events: none; }
+        
+        .controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: center; gap: 20px; pointer-events: auto; }
+        
+        #btn-capture { width: 70px; height: 70px; border-radius: 50%; border: 4px solid white; background: rgba(0,0,0,0.2); position: relative; }
+        #btn-capture::after { content:''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 54px; height: 54px; background: white; border-radius: 50%; transition: 0.1s; }
+        #btn-capture:active::after { transform: translate(-50%,-50%) scale(0.9); background: var(--primary); }
 
-        /* 2. 3D Overlay (Middle) */
-        #canvas-container {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 2; pointer-events: none; /* Allow touches to pass if needed, but we handle via JS */
-        }
+        .action-btn { background: var(--surface); color: white; border: 1px solid #444; padding: 10px 20px; border-radius: 20px; cursor: pointer; }
+        .save-btn { background: var(--primary); color: black; border: none; font-weight: bold; display: none; }
 
-        /* 3. UI (Top) */
-        #ui-layer {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 10; pointer-events: none;
-            display: flex; flex-direction: column; justify-content: space-between;
-        }
+        /* --- TOAST POPUP --- */
+        #toast-container { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 100; pointer-events: none; width: 80%; text-align: center; }
+        .toast { background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; margin-bottom: 10px; font-size: 14px; backdrop-filter: blur(5px); animation: fadeUp 0.3s ease; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* --- UI Elements --- */
-        .status-bar {
-            background: rgba(0,0,0,0.6); color: white; padding: 10px 20px;
-            text-align: center; font-size: 14px; margin: 20px; border-radius: 20px;
-            backdrop-filter: blur(4px); pointer-events: auto;
-        }
-
-        .center-reticle {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 250px; height: 250px;
-            border: 2px dashed rgba(255, 255, 255, 0.8); border-radius: 12px;
-            box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); /* Dim the surroundings */
-        }
-
-        .controls {
-            display: flex; justify-content: center; align-items: center; gap: 20px;
-            padding-bottom: 40px; pointer-events: auto; width: 100%;
-        }
-
-        /* Buttons */
-        .btn-circle {
-            width: 70px; height: 70px; border-radius: 50%;
-            border: 4px solid white; background: rgba(0,0,0,0.3);
-            position: relative; cursor: pointer; transition: transform 0.1s;
-        }
-        .btn-circle::after {
-            content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 50px; height: 50px; background: #2ecc71; border-radius: 50%;
-        }
-        .btn-circle:active { transform: scale(0.9); }
-
-        .btn-rect {
-            padding: 12px 24px; background: #3498db; color: white; border: none;
-            border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-
-        /* Intro / Start Screen */
-        #start-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111; z-index: 100;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            color: white; text-align: center; padding: 20px;
-        }
-        .loading-spinner {
-            border: 4px solid #333; border-top: 4px solid #3498db;
-            border-radius: 50%; width: 40px; height: 40px;
-            animation: spin 1s linear infinite; margin-bottom: 20px;
-        }
+        /* --- LOADING SPINNER --- */
+        .spinner { width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; display: none; margin-left: 10px;}
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* Hide elements initially */
-        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-    <!-- Start / Loading Screen -->
-    <div id="start-screen">
-        <div class="loading-spinner" id="loader"></div>
-        <h2 id="status-msg">Loading Computer Vision...</h2>
-        <p style="color:#aaa; font-size: 14px;">(This downloads ~8MB, please wait)</p>
-        <button id="btn-start" class="btn-rect hidden" style="margin-top:20px; font-size:20px; padding:15px 40px;">
-            START CAMERA
+    <!-- TOAST NOTIFICATIONS -->
+    <div id="toast-container"></div>
+
+    <!-- GALLERY SCREEN (HOME) -->
+    <div id="gallery-screen" class="screen">
+        <div class="gallery-header">
+            <h2>My Spheres</h2>
+        </div>
+        <div id="gallery-list" class="gallery-grid">
+            <!-- Items injected by JS -->
+        </div>
+        <div id="empty-msg" class="empty-msg">No captures yet. Tap + to start.</div>
+        <button id="btn-new">
+            <span>+</span> New Capture <div class="spinner" id="init-spinner"></div>
         </button>
     </div>
 
-    <!-- Video Feed -->
-    <video id="webcam" playsinline muted autoplay></video>
+    <!-- CAMERA / 3D SCREEN -->
+    <video id="video-feed" playsinline muted autoplay></video>
+    <div id="three-container"></div>
 
-    <!-- 3D Canvas -->
-    <div id="canvas-container"></div>
+    <div id="ui-layer" style="display: none;">
+        <div class="top-bar">
+            <button class="action-btn" id="btn-home">Back</button>
+            
+            <!-- Mode Toggle -->
+            <div class="toggle-switch" id="mode-toggle">
+                <div class="slider" id="mode-slider"></div>
+                <button class="toggle-btn active" data-mode="manual">Manual</button>
+                <button class="toggle-btn" data-mode="auto">Tracker</button>
+            </div>
+        </div>
 
-    <!-- UI Overlay -->
-    <div id="ui-layer" class="hidden">
-        <div class="status-bar" id="tracker-status">Initializing Tracker...</div>
-        
-        <div class="center-reticle"></div>
+        <div class="reticle"></div>
 
         <div class="controls">
-            <!-- Capture Button -->
-            <div id="btn-capture" class="btn-circle"></div>
-            <!-- Finish Button (Hidden initially) -->
-            <button id="btn-finish" class="btn-rect hidden">VIEW SPHERE</button>
-            <!-- Reload Button (Hidden initially) -->
-            <button id="btn-restart" class="btn-rect hidden" style="background:#e74c3c">NEW</button>
+            <div id="btn-capture"></div>
+            <button class="action-btn save-btn" id="btn-save">FINISH & SAVE</button>
         </div>
     </div>
 
-    <!-- Libraries -->
-    <!-- 1. OpenCV for Tracking -->
+    <!-- SCRIPTS -->
     <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onCvLoaded()"></script>
     
-    <!-- 2. Three.js for 3D Sphere -->
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- Configuration ---
-        const TRACKING_POINTS = 40;
-        const MIN_POINTS = 10;
-        const SENSITIVITY = 0.003; // Adjust mouse rotation speed
-
-        // --- Globals ---
-        let video, canvasContainer;
-        let scene, camera, renderer, cubeMesh;
-        let materials = [];
-        let cvReady = false;
-        let isTracking = false;
-        let isViewerMode = false;
-        
-        // OpenCV Variables
-        let cap, oldGray, frameGray, p0, p1, st, err;
-
-        // State
-        let capturedCount = 0;
-
-        // --- DOM Elements ---
-        const startScreen = document.getElementById('start-screen');
-        const startBtn = document.getElementById('btn-start');
-        const statusMsg = document.getElementById('status-msg');
-        const uiLayer = document.getElementById('ui-layer');
-        const trackerStatus = document.getElementById('tracker-status');
-        const btnCapture = document.getElementById('btn-capture');
-        const btnFinish = document.getElementById('btn-finish');
-        const btnRestart = document.getElementById('btn-restart');
-
-        // --- 1. Initialization ---
-        
-        window.onCvLoaded = function() {
-            cvReady = true;
-            document.getElementById('loader').style.display = 'none';
-            statusMsg.innerText = "System Ready";
-            startBtn.classList.remove('hidden');
+        // --- STATE ---
+        const state = {
+            mode: 'manual', // 'manual' or 'auto'
+            trackingReady: false,
+            capturing: false,
+            capturedCount: 0,
+            isViewer: false
         };
 
-        startBtn.addEventListener('click', async () => {
-            startBtn.innerText = "Requesting Access...";
-            try {
-                // Initialize Video
-                video = document.getElementById('webcam');
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment',
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    }, 
-                    audio: false 
-                });
-                video.srcObject = stream;
-                
-                // Wait for video to actually play data
-                video.onloadedmetadata = () => {
-                    video.play();
-                    startScreen.style.display = 'none';
-                    uiLayer.classList.remove('hidden');
-                    initThreeJS();
-                    initTracking();
-                    animate();
-                };
-            } catch (err) {
-                alert("Camera Error: " + err.message + "\nEnsure you are on HTTPS or Localhost.");
-                startBtn.innerText = "RETRY";
-            }
+        // --- DOM ---
+        const ui = {
+            gallery: document.getElementById('gallery-screen'),
+            grid: document.getElementById('gallery-list'),
+            empty: document.getElementById('empty-msg'),
+            uiLayer: document.getElementById('ui-layer'),
+            video: document.getElementById('video-feed'),
+            btnNew: document.getElementById('btn-new'),
+            btnCapture: document.getElementById('btn-capture'),
+            btnSave: document.getElementById('btn-save'),
+            btnHome: document.getElementById('btn-home'),
+            toggle: document.getElementById('mode-toggle'),
+            slider: document.getElementById('mode-slider'),
+            spinner: document.getElementById('init-spinner')
+        };
+
+        // --- THREE.JS GLOBALS ---
+        let scene, camera, renderer, controls, boxMesh;
+        let materials = [];
+        
+        // --- OPENCV GLOBALS ---
+        let cap, oldGray, frameGray, p0, p1, st, err;
+        let trackingLoopId = null;
+
+        // --- INITIALIZATION ---
+        initGallery();
+        initThree();
+
+        // --- EVENT LISTENERS ---
+        ui.btnNew.addEventListener('click', startSession);
+        ui.btnHome.addEventListener('click', goHome);
+        ui.btnCapture.addEventListener('click', captureFace);
+        ui.btnSave.addEventListener('click', finishAndSave);
+        
+        // Mode Toggle Logic
+        ui.toggle.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const mode = e.target.dataset.mode;
+                setMode(mode);
+            });
         });
 
-        // --- 2. Three.js Setup (The UI/Overlay) ---
+        // Global function for OpenCV load
+        window.onCvLoaded = () => {
+            state.trackingReady = true;
+            console.log("OpenCV Ready");
+        };
 
-        function initThreeJS() {
-            canvasContainer = document.getElementById('canvas-container');
+        // --- GALLERY FUNCTIONS ---
+        function initGallery() {
+            const data = JSON.parse(localStorage.getItem('sphere_gallery') || '[]');
+            ui.grid.innerHTML = '';
             
-            // Scene Setup
-            scene = new THREE.Scene();
-            scene.background = null; // Transparent!
+            if (data.length === 0) {
+                ui.empty.style.display = 'block';
+            } else {
+                ui.empty.style.display = 'none';
+                data.forEach((item, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'gallery-item';
+                    div.innerHTML = `
+                        <img src="${item.thumb}" />
+                        <div class="gallery-date">${new Date(item.date).toLocaleDateString()}</div>
+                        <button class="delete-btn">×</button>
+                    `;
+                    // Click to View
+                    div.onclick = (e) => {
+                        if(e.target.className !== 'delete-btn') openViewer(item.image);
+                    }
+                    // Delete
+                    div.querySelector('.delete-btn').onclick = (e) => {
+                        e.stopPropagation();
+                        deleteItem(index);
+                    };
+                    ui.grid.appendChild(div);
+                });
+            }
+        }
 
+        function deleteItem(index) {
+            let data = JSON.parse(localStorage.getItem('sphere_gallery') || '[]');
+            data.splice(index, 1);
+            localStorage.setItem('sphere_gallery', JSON.stringify(data));
+            initGallery();
+        }
+
+        // --- CAMERA SESSION ---
+        async function startSession() {
+            ui.spinner.style.display = 'inline-block';
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment', width: { ideal: 640 } } 
+                });
+                ui.video.srcObject = stream;
+                
+                // Wait for video
+                await new Promise(r => ui.video.onloadedmetadata = r);
+                ui.video.play();
+                ui.video.style.opacity = 1;
+
+                // Reset 3D Scene
+                resetScene();
+                
+                // UI Transitions
+                ui.gallery.classList.add('hidden');
+                ui.uiLayer.style.display = 'block';
+                ui.spinner.style.display = 'none';
+                
+                // Default to Manual first (instant)
+                setMode('manual');
+                
+                animate();
+
+            } catch (e) {
+                showToast("Camera access denied or error", "error");
+                ui.spinner.style.display = 'none';
+            }
+        }
+
+        function goHome() {
+            location.reload(); // Simplest way to clean up WebGL and Streams
+        }
+
+        // --- MODE SWITCHING ---
+        function setMode(mode) {
+            state.mode = mode;
+            
+            // UI Visuals
+            const btns = ui.toggle.querySelectorAll('.toggle-btn');
+            btns.forEach(b => b.classList.remove('active'));
+            ui.toggle.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+            ui.slider.style.transform = mode === 'manual' ? 'translateX(0)' : 'translateX(100%)';
+
+            // Logic
+            if (mode === 'auto') {
+                if (!state.trackingReady) {
+                    showToast("Tracker loading... please wait", "normal");
+                    setTimeout(() => {
+                        if(state.trackingReady) setMode('auto');
+                        else {
+                            showToast("Tracker failed. Using manual.", "error");
+                            setMode('manual');
+                        }
+                    }, 1000);
+                    return;
+                }
+                controls.enabled = false; // Disable manual drag
+                initTracking();
+                showToast("Motion Tracking ON. Move slowly.", "normal");
+            } else {
+                controls.enabled = true; // Enable manual drag
+                stopTracking();
+                showToast("Manual Mode: Swipe to look around", "normal");
+            }
+        }
+
+        // --- 3D LOGIC ---
+        function initThree() {
+            scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 0, 0.1); // Inside the box
+            camera.position.set(0, 0, 0.1);
 
             renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            canvasContainer.appendChild(renderer.domElement);
+            document.getElementById('three-container').appendChild(renderer.domElement);
 
-            // Create Cube (The "Globe" segments)
-            const geo = new THREE.BoxGeometry(10, 10, 10);
-            
-            // Create 6 transparent materials with wireframes
-            for(let i=0; i<6; i++) {
-                // Create a canvas for the label "Face X"
-                const lblCanvas = document.createElement('canvas');
-                lblCanvas.width = 256; lblCanvas.height = 256;
-                const ctx = lblCanvas.getContext('2d');
-                ctx.fillStyle = 'rgba(255,255,255,0.1)';
-                ctx.fillRect(0,0,256,256);
-                ctx.strokeStyle = 'white';
-                ctx.lineWidth = 4;
-                ctx.strokeRect(0,0,256,256);
-                
-                const tex = new THREE.CanvasTexture(lblCanvas);
-                
-                const mat = new THREE.MeshBasicMaterial({ 
-                    map: tex,
-                    transparent: true,
-                    opacity: 0.5,
-                    side: THREE.BackSide
-                });
-                mat.userData = { filled: false, originalTex: tex };
-                materials.push(mat);
-            }
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableZoom = false;
+            controls.enablePan = false;
+            controls.rotateSpeed = -0.5; // Invert for inside view
 
-            cubeMesh = new THREE.Mesh(geo, materials);
-            cubeMesh.scale.set(-1, 1, 1); // Invert scale for inside view
-            scene.add(cubeMesh);
-
-            // Resize Handler
+            // Resize
             window.addEventListener('resize', () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
-
-            // Button Listeners
-            btnCapture.addEventListener('click', captureSegment);
-            btnFinish.addEventListener('click', finishAndSave);
-            btnRestart.addEventListener('click', () => location.reload());
         }
 
-        // --- 3. OpenCV Tracking (The "Gyro") ---
+        function resetScene() {
+            // Remove old meshes
+            if(boxMesh) scene.remove(boxMesh);
+            materials = [];
+            state.capturedCount = 0;
+            ui.btnSave.style.display = 'none';
+            ui.btnCapture.style.display = 'block';
 
+            // Create Box Box (The Capture Slots)
+            const geo = new THREE.BoxGeometry(10, 10, 10);
+            for(let i=0; i<6; i++) {
+                // Placeholder texture
+                const cvs = document.createElement('canvas');
+                cvs.width = 64; cvs.height = 64;
+                const ctx = cvs.getContext('2d');
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                ctx.fillRect(0,0,64,64);
+                ctx.strokeStyle = '#555';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(0,0,64,64);
+                
+                const mat = new THREE.MeshBasicMaterial({ 
+                    map: new THREE.CanvasTexture(cvs), 
+                    side: THREE.BackSide, transparent: true, opacity: 0.6 
+                });
+                mat.userData = { filled: false };
+                materials.push(mat);
+            }
+            boxMesh = new THREE.Mesh(geo, materials);
+            boxMesh.scale.set(-1, 1, 1); // Inside view
+            scene.add(boxMesh);
+            state.isViewer = false;
+        }
+
+        // --- CAPTURE LOGIC ---
+        function captureFace() {
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObject(boxMesh);
+
+            if (intersects.length > 0) {
+                const mat = intersects[0].face.materialIndex;
+                const material = materials[mat];
+
+                // Create Texture
+                const size = 1024;
+                const cvs = document.createElement('canvas');
+                cvs.width = size; cvs.height = size;
+                const ctx = cvs.getContext('2d');
+                
+                // Crop Square
+                const vw = ui.video.videoWidth, vh = ui.video.videoHeight;
+                const min = Math.min(vw, vh);
+                ctx.translate(size, 0); ctx.scale(-1, 1); // Mirror
+                ctx.drawImage(ui.video, (vw-min)/2, (vh-min)/2, min, min, 0, 0, size, size);
+
+                // Apply
+                if(material.map) material.map.dispose();
+                material.map = new THREE.CanvasTexture(cvs);
+                material.map.colorSpace = THREE.SRGBColorSpace;
+                material.opacity = 1;
+                material.needsUpdate = true;
+
+                // Flash animation
+                flashScreen();
+
+                // Logic
+                if(!material.userData.filled) {
+                    material.userData.filled = true;
+                    state.capturedCount++;
+                    showToast(`Captured ${state.capturedCount}/6`, "normal");
+                    if(state.capturedCount >= 6) {
+                        ui.btnSave.style.display = 'block';
+                        showToast("All segments filled!", "success");
+                    }
+                }
+            }
+        }
+
+        // --- TRACKING LOGIC ---
         function initTracking() {
-            // Setup Matrices
-            const width = video.videoWidth;
-            const height = video.videoHeight;
-            
-            cap = new cv.VideoCapture(video);
-            oldGray = new cv.Mat(height, width, cv.CV_8UC1);
-            frameGray = new cv.Mat(height, width, cv.CV_8UC1);
-            p0 = new cv.Mat();
-            p1 = new cv.Mat();
-            st = new cv.Mat();
-            err = new cv.Mat();
+            try {
+                const w = ui.video.videoWidth, h = ui.video.videoHeight;
+                cap = new cv.VideoCapture(ui.video);
+                oldGray = new cv.Mat(h, w, cv.CV_8UC1);
+                frameGray = new cv.Mat(h, w, cv.CV_8UC1);
+                p0 = new cv.Mat(); p1 = new cv.Mat(); st = new cv.Mat(); err = new cv.Mat();
+                
+                cap.read(oldGray);
+                cv.cvtColor(oldGray, oldGray, cv.COLOR_RGBA2GRAY);
+                
+                detectFeatures();
+                processTracking();
+            } catch(e) {
+                console.error(e);
+                setMode('manual');
+            }
+        }
 
-            // Initial Capture
-            cap.read(oldGray);
-            cv.cvtColor(oldGray, oldGray, cv.COLOR_RGBA2GRAY);
-            
-            // Find Initial Features
-            detectFeatures();
-            isTracking = true;
+        function stopTracking() {
+            if(trackingLoopId) cancelAnimationFrame(trackingLoopId);
+            trackingLoopId = null;
         }
 
         function detectFeatures() {
-            // Identify corners to track
             let none = new cv.Mat();
-            cv.goodFeaturesToTrack(oldGray, p0, TRACKING_POINTS, 0.3, 7, none, 3, false, 0.04);
+            cv.goodFeaturesToTrack(oldGray, p0, 50, 0.3, 7, none);
             none.delete();
-            trackerStatus.innerText = "Tracking Object...";
-            trackerStatus.style.color = "#2ecc71"; // Green
         }
 
         function processTracking() {
-            if (!isTracking || isViewerMode) return;
+            if(state.mode !== 'auto') return;
 
             try {
-                // Read new frame
                 cap.read(frameGray);
                 cv.cvtColor(frameGray, frameGray, cv.COLOR_RGBA2GRAY);
 
-                // If we have points, calculate flow
-                if (p0.rows > 0) {
-                    let winSize = new cv.Size(15, 15);
-                    let maxLevel = 2;
-                    let criteria = new cv.TermCriteria(cv.TermCriteria_EPS | cv.TermCriteria_COUNT, 10, 0.03);
+                if(p0.rows > 0) {
+                    cv.calcOpticalFlowPyrLK(oldGray, frameGray, p0, p1, st, err);
                     
-                    // Optical Flow
-                    cv.calcOpticalFlowPyrLK(oldGray, frameGray, p0, p1, st, err, winSize, maxLevel, criteria);
-
-                    // Calculate Movement
                     let dx = 0, dy = 0, count = 0;
-                    
-                    // Create new array of healthy points
-                    let goodPoints = [];
-
-                    for (let i = 0; i < st.rows; i++) {
-                        if (st.data[i] === 1) { // 1 = Found
-                            const x0 = p0.data32F[i*2];
-                            const y0 = p0.data32F[i*2+1];
-                            const x1 = p1.data32F[i*2];
-                            const y1 = p1.data32F[i*2+1];
-
-                            // Simple Delta
-                            dx += (x1 - x0);
-                            dy += (y1 - y0);
+                    let goodArr = [];
+                    for(let i=0; i<st.rows; i++) {
+                        if(st.data[i] === 1) {
+                            dx += (p1.data32F[i*2] - p0.data32F[i*2]);
+                            dy += (p1.data32F[i*2+1] - p0.data32F[i*2+1]);
                             count++;
-                            
-                            // Keep point for next frame
-                            goodPoints.push(x1);
-                            goodPoints.push(y1);
+                            goodArr.push(p1.data32F[i*2], p1.data32F[i*2+1]);
                         }
                     }
 
-                    // Apply to Camera (Invert Logic for "Looking Around")
-                    if (count > 0) {
-                        dx /= count;
-                        dy /= count;
-                        
-                        camera.rotation.y -= dx * SENSITIVITY;
-                        camera.rotation.x -= dy * SENSITIVITY;
+                    if(count > 0) {
+                        camera.rotation.y -= (dx/count) * 0.003;
+                        camera.rotation.x -= (dy/count) * 0.003;
                     }
 
-                    // Check Object Handover
-                    if (count < MIN_POINTS) {
-                        trackerStatus.innerText = "Acquiring New Features...";
-                        trackerStatus.style.color = "yellow";
-                        detectFeatures(); // Re-scan full frame for new objects
-                    } else {
-                        // Update p0 with p1 data manually
-                        // We recreate p0 from the good points to keep memory clean
-                        p0.delete(); 
-                        p0 = new cv.Mat(goodPoints.length / 2, 1, cv.CV_32FC2);
-                        for(let i=0; i<goodPoints.length; i++) {
-                            p0.data32F[i] = goodPoints[i];
-                        }
+                    if(count < 20) detectFeatures();
+                    else {
+                        p0.delete();
+                        p0 = new cv.Mat(goodArr.length/2, 1, cv.CV_32FC2);
+                        for(let i=0; i<goodArr.length; i++) p0.data32F[i] = goodArr[i];
                     }
+                } else detectFeatures();
 
-                } else {
-                    detectFeatures();
-                }
-
-                // Swap frames
                 frameGray.copyTo(oldGray);
-
-            } catch (e) {
-                console.error("Tracking Error:", e);
-                // Fail-safe: try to re-init if crash
-                detectFeatures(); 
+                trackingLoopId = requestAnimationFrame(processTracking);
+            } catch(e) {
+                // Tracking lost or err, restart loop
+                trackingLoopId = requestAnimationFrame(processTracking);
             }
         }
 
-        // --- 4. Capture & Storage ---
-
-        function captureSegment() {
-            // Raycast to find which face we are facing
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-            const intersects = raycaster.intersectObject(cubeMesh);
-
-            if (intersects.length > 0) {
-                const faceIndex = intersects[0].face.materialIndex;
-                const mat = materials[faceIndex];
-
-                // Capture high-res square from video
-                const size = 1024;
-                const canvas = document.createElement('canvas');
-                canvas.width = size; canvas.height = size;
-                const ctx = canvas.getContext('2d');
-
-                const vW = video.videoWidth;
-                const vH = video.videoHeight;
-                const min = Math.min(vW, vH);
-                
-                // Mirror logic to match CSS mirror
-                ctx.translate(size, 0);
-                ctx.scale(-1, 1);
-                
-                // Center crop
-                ctx.drawImage(video, (vW-min)/2, (vH-min)/2, min, min, 0, 0, size, size);
-
-                // Update Texture
-                if(mat.map) mat.map.dispose();
-                mat.map = new THREE.CanvasTexture(canvas);
-                mat.map.colorSpace = THREE.SRGBColorSpace;
-                mat.opacity = 1; 
-                mat.needsUpdate = true;
-
-                // Flash Effect
-                const flash = document.createElement('div');
-                flash.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:999;transition:opacity 0.2s;";
-                document.body.appendChild(flash);
-                setTimeout(() => flash.style.opacity = 0, 50);
-                setTimeout(() => flash.remove(), 250);
-
-                if (!mat.userData.filled) {
-                    mat.userData.filled = true;
-                    capturedCount++;
-                    trackerStatus.innerText = `Captured ${capturedCount}/6`;
-                    if (capturedCount >= 1) {
-                        btnFinish.classList.remove('hidden');
-                    }
-                }
-            }
-        }
-
+        // --- SAVING ---
         function finishAndSave() {
-            if(!confirm("Finish and view sphere?")) return;
+            showToast("Processing Sphere...", "normal");
             
-            // Disable tracking
-            isViewerMode = true;
-            trackerStatus.innerText = "Processing...";
+            // 1. Render Cube to Equirectangular
+            const cubeRT = new THREE.WebGLCubeRenderTarget(1024);
+            const cubeCam = new THREE.CubeCamera(0.1, 100, cubeRT);
+            boxMesh.scale.set(-1,1,1); // Ensure inside view
             
-            // 1. Generate Equirectangular Image
-            // We hide the mesh temporarily to render the SCENE (which is just the box)
-            // But actually we want to render the BOX.
-            // Setup CubeCamera
-            const cubeTarget = new THREE.WebGLCubeRenderTarget(1024);
-            const cubeCam = new THREE.CubeCamera(0.1, 100, cubeTarget);
+            // Hide UI helpers if any
             scene.add(cubeCam);
-            
-            // Ensure mesh is visible and solid
-            cubeMesh.scale.set(1, 1, 1); // Reset scale for external viewing capture
-            // We need to render FROM THE CENTER, looking at the box faces.
-            // The box faces are at distances.
-            
-            // Actually, simplest way: Just use the materials we have.
-            // But we need to stitch them. 
-            // Let's use the shader approach.
-            
-            // Render the INSIDE of the box to the CubeCamera
-            cubeMesh.scale.set(-1, 1, 1); // Ensure it's inside-out
             cubeCam.update(renderer, scene);
             
-            // Shader to unwrap
-            const equiMat = new THREE.ShaderMaterial({
-                uniforms: { map: { value: cubeTarget.texture } },
-                vertexShader: `
-                    varying vec2 vUv;
-                    void main() { vUv = uv; gl_Position = vec4(position, 1.0); }
-                `,
+            // Shader material to unwrap
+            const mat = new THREE.ShaderMaterial({
+                uniforms: { tCube: { value: cubeRT.texture } },
+                vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position, 1.0); }`,
                 fragmentShader: `
-                    uniform samplerCube map;
-                    varying vec2 vUv;
+                    uniform samplerCube tCube; varying vec2 vUv;
                     const float PI = 3.14159265359;
                     void main() {
                         vec2 uv = vUv;
-                        float longitude = uv.x * 2.0 * PI - PI;
-                        float latitude = uv.y * PI - PI / 2.0;
-                        vec3 dir = vec3(
-                            -cos(latitude) * sin(longitude),
-                            sin(latitude),
-                            -cos(latitude) * cos(longitude)
-                        );
-                        gl_FragColor = textureCube(map, normalize(dir));
+                        float lon = uv.x * 2.0 * PI - PI;
+                        float lat = uv.y * PI - PI / 2.0;
+                        vec3 dir = vec3(-cos(lat)*sin(lon), sin(lat), -cos(lat)*cos(lon));
+                        gl_FragColor = textureCube(tCube, normalize(dir));
                     }
                 `,
                 side: THREE.DoubleSide
             });
-            
+
             const exportScene = new THREE.Scene();
-            const plane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), equiMat);
-            exportScene.add(plane);
-            const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+            exportScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), mat));
+            const exportCam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
             
             renderer.setSize(2048, 1024);
-            renderer.render(exportScene, ortho);
+            renderer.render(exportScene, exportCam);
             
-            // Save to LocalStorage
+            // 2. Save Data
+            const fullImg = renderer.domElement.toDataURL('image/jpeg', 0.8);
+            
+            // Create Tiny Thumbnail
+            const thumbCanvas = document.createElement('canvas');
+            thumbCanvas.width = 150; thumbCanvas.height = 150;
+            thumbCanvas.getContext('2d').drawImage(renderer.domElement, 0,0,150,150);
+            const thumbImg = thumbCanvas.toDataURL('image/jpeg', 0.5);
+
+            const newItem = {
+                id: Date.now(),
+                date: new Date().toISOString(),
+                image: fullImg,
+                thumb: thumbImg
+            };
+
+            // Save to LS
             try {
-                const data = renderer.domElement.toDataURL('image/jpeg', 0.85);
-                localStorage.setItem('savedSphere', data);
-                enterViewerMode(data);
+                let list = JSON.parse(localStorage.getItem('sphere_gallery') || '[]');
+                list.unshift(newItem);
+                // Limit to 5 items to prevent QuotaExceeded
+                if(list.length > 5) list.pop(); 
+                localStorage.setItem('sphere_gallery', JSON.stringify(list));
+                
+                showToast("Saved to Gallery!", "success");
+                setTimeout(goHome, 1000);
             } catch(e) {
-                alert("Image too large for storage on this device.");
-                enterViewerMode(renderer.domElement.toDataURL()); // Try anyway
+                showToast("Storage Full! Delete old items.", "error");
             }
         }
 
-        function enterViewerMode(dataUrl) {
-            // UI Updates
-            btnCapture.classList.add('hidden');
-            btnFinish.classList.add('hidden');
-            btnRestart.classList.remove('hidden');
-            document.querySelector('.center-reticle').classList.add('hidden');
-            trackerStatus.innerText = "Viewer Mode - Drag to Look";
-            video.style.display = 'none'; // Hide webcam
+        // --- VIEWER MODE ---
+        function openViewer(imgData) {
+            ui.gallery.classList.add('hidden');
+            ui.uiLayer.style.display = 'block';
+            ui.video.style.opacity = 0; // Hide webcam
             
-            // Reset Scene for viewing
-            scene.remove(cubeMesh);
-            scene.background = new THREE.Color('#111');
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            // Setup Scene for Viewer
+            resetScene();
+            scene.remove(boxMesh); // Remove box
             
-            // Load Sphere
-            const tex = new THREE.TextureLoader().load(dataUrl);
+            // Add Sphere
+            const tex = new THREE.TextureLoader().load(imgData);
             tex.colorSpace = THREE.SRGBColorSpace;
-            const sphGeo = new THREE.SphereGeometry(10, 60, 40);
-            const sphMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide });
-            const sphere = new THREE.Mesh(sphGeo, sphMat);
-            sphere.scale.set(-1, 1, 1);
-            scene.add(sphere);
-            
-            // Enable Touch Controls
-            camera.position.set(0,0,0.1);
-            camera.rotation.set(0,0,0);
-            const controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableZoom = false;
-            controls.rotateSpeed = -0.5;
-            
-            // Stop OpenCV
-            isTracking = false;
-            cap.delete(); p0.delete(); p1.delete();
-            
-            // Animation Loop handles the rest
+            const sph = new THREE.Mesh(
+                new THREE.SphereGeometry(10, 60, 40),
+                new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide })
+            );
+            sph.scale.set(-1,1,1);
+            scene.add(sph);
+
+            // Configure UI
+            ui.btnCapture.style.display = 'none';
+            ui.btnSave.style.display = 'none';
+            ui.toggle.style.visibility = 'hidden'; // Hide toggle
+            controls.enabled = true; // Always manual in viewer
+            showToast("Drag to look around", "normal");
         }
 
+        // --- UTILS ---
         function animate() {
             requestAnimationFrame(animate);
-            processTracking();
             renderer.render(scene, camera);
+            if(controls.enabled) controls.update();
         }
 
+        function showToast(msg, type) {
+            const t = document.createElement('div');
+            t.className = 'toast';
+            t.innerText = msg;
+            if(type === 'error') t.style.background = 'rgba(255, 50, 50, 0.9)';
+            if(type === 'success') t.style.background = 'rgba(50, 200, 80, 0.9)';
+            document.getElementById('toast-container').appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        function flashScreen() {
+            const f = document.createElement('div');
+            f.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:99;transition:opacity 0.2s";
+            document.body.appendChild(f);
+            setTimeout(()=>f.style.opacity=0,50);
+            setTimeout(()=>f.remove(),250);
+        }
     </script>
 </body>
 </html>
