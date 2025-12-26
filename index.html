@@ -1,170 +1,355 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>No-Gyro Camera 360 (Back Camera)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Precision 360 Viewer</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        
+        /* FULLSCREEN CANVAS */
+        #container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
 
-<style>
-  html, body {
-    margin: 0;
-    overflow: hidden;
-    background: black;
-  }
-  video, canvas#cv {
-    display: none; /* FULLY HIDDEN */
-  }
-</style>
+        /* UI OVERLAY */
+        #ui {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
 
-<!-- Three.js -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
+        /* STATUS TEXT */
+        #status-bar {
+            background: rgba(0,0,0,0.7);
+            color: #00ffcc;
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+            pointer-events: auto;
+        }
 
-<!-- OpenCV.js -->
-<script async src="https://docs.opencv.org/4.9.0/opencv.js"></script>
+        /* LOADING SPINNER */
+        #loader {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid white;
+            text-align: center;
+        }
+
+        /* BOTTOM CONTROL AREA */
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding-bottom: 50px;
+            pointer-events: none; /* Let touches pass to canvas mostly */
+        }
+
+        /* 3D CUBE BUTTON */
+        .scene-btn {
+            width: 80px;
+            height: 80px;
+            perspective: 600px;
+            pointer-events: auto; /* Enable touch on the cube */
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .cube {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.1s; /* Smooth update */
+            animation: idleSpin 10s infinite linear;
+        }
+
+        @keyframes idleSpin { 100% { transform: rotateX(-20deg) rotateY(360deg); } }
+
+        .cube-face {
+            position: absolute;
+            width: 80px; height: 80px;
+            border: 2px solid #fff;
+            background: rgba(0, 100, 255, 0.5);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: #fff; font-size: 12px;
+            backface-visibility: hidden; /* Hide inside faces */
+        }
+
+        /* Cube Face Positions */
+        .f-front  { transform: rotateY(  0deg) translateZ(40px); }
+        .f-back   { transform: rotateY(180deg) translateZ(40px); }
+        .f-right  { transform: rotateY( 90deg) translateZ(40px); }
+        .f-left   { transform: rotateY(-90deg) translateZ(40px); }
+        .f-top    { transform: rotateX( 90deg) translateZ(40px); }
+        .f-bottom { transform: rotateX(-90deg) translateZ(40px); }
+
+        /* ACTIVE STATE (When holding button) */
+        .active .cube { animation: none; }
+        .active .cube-face { background: rgba(255, 0, 80, 0.8); border-color: #ff0050; box-shadow: 0 0 20px #ff0050; }
+
+    </style>
 </head>
-
 <body>
 
-<video id="video" autoplay playsinline></video>
-<canvas id="cv"></canvas>
+    <!-- 3D Canvas -->
+    <div id="container"></div>
 
-<script>
-/* =========================
-   THREE.JS SCENE
-========================= */
+    <!-- Interface -->
+    <div id="ui">
+        <div id="status-bar">Drag screen to look • <b>HOLD CUBE</b> to tilt-control</div>
+        
+        <div id="loader">
+            Loading High-Res Image...<br>
+            <span style="font-size:10px; color:#aaa;">If it freezes, a grid will load in 5s.</span>
+        </div>
 
-const scene = new THREE.Scene()
+        <div class="controls">
+            <div class="scene-btn" id="ctrlBtn">
+                <div class="cube" id="cube">
+                    <div class="cube-face f-front">HOLD</div>
+                    <div class="cube-face f-back">ME</div>
+                    <div class="cube-face f-right">►</div>
+                    <div class="cube-face f-left">◄</div>
+                    <div class="cube-face f-top">▲</div>
+                    <div class="cube-face f-bottom">▼</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000
-)
+    <!-- THREE.JS -->
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
 
-const renderer = new THREE.WebGLRenderer({ antialias: true })
-renderer.setSize(window.innerWidth, window.innerHeight)
-document.body.appendChild(renderer.domElement)
+    <script type="module">
+        import * as THREE from 'three';
 
-// 360 sphere
-const geometry = new THREE.SphereGeometry(500, 64, 48)
-geometry.scale(-1, 1, 1)
+        // --- 1. SETUP ---
+        const container = document.getElementById('container');
+        const loaderDiv = document.getElementById('loader');
+        const statusEl = document.getElementById('status-bar');
+        
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(80, window.innerWidth/window.innerHeight, 0.1, 2000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
 
-// IMPORTANT: use crossOrigin-safe loading
-const texture = new THREE.TextureLoader()
-texture.setCrossOrigin("anonymous")
+        // --- 2. IMAGE LOADING ROBUSTNESS ---
+        // We use a generated grid if the image fails (CORS/Network)
+        function createFallbackTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#111'; ctx.fillRect(0,0,512,256);
+            ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 2;
+            
+            // Draw Grid
+            for(let i=0; i<512; i+=32) { ctx.moveTo(i,0); ctx.lineTo(i,256); }
+            for(let i=0; i<256; i+=32) { ctx.moveTo(0,i); ctx.lineTo(512,i); }
+            ctx.stroke();
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
 
-const pano = texture.load(
-  "https://storage.noirlab.edu/media/archives/images/large/20220407_Pachon_P35mm_SOARG_L_Fulld1-CC.jpg"
-)
+        const sphereGeo = new THREE.SphereGeometry(500, 60, 40);
+        sphereGeo.scale(-1, 1, 1); // Invert geometry
+        
+        const manager = new THREE.LoadingManager();
+        const textureLoader = new THREE.TextureLoader(manager);
+        
+        // DIRECT IMAGE LINK (No Proxy - Proxies break often)
+        const imgUrl = 'https://storage.noirlab.edu/media/archives/images/thumb300y/20220407_Pachon_P35mm_SOARG_L_Fulld1-CC.jpg';
+        
+        textureLoader.setCrossOrigin('anonymous');
+        
+        // TIMEOUT SAFETY: If image takes > 5 seconds, force load grid
+        const loadTimeout = setTimeout(() => {
+            if(loaderDiv.style.display !== 'none') {
+                console.log("Image timed out. Using grid.");
+                finishLoad(createFallbackTexture(), "Network Timeout - Using Grid");
+            }
+        }, 5000);
 
-const material = new THREE.MeshBasicMaterial({ map: pano })
-scene.add(new THREE.Mesh(geometry, material))
+        textureLoader.load(
+            imgUrl,
+            (tex) => { 
+                clearTimeout(loadTimeout);
+                finishLoad(tex, "Ready");
+            },
+            undefined,
+            (err) => {
+                clearTimeout(loadTimeout);
+                finishLoad(createFallbackTexture(), "CORS/Error - Using Grid");
+            }
+        );
 
-camera.rotation.order = "YXZ"
+        function finishLoad(texture, msg) {
+            loaderDiv.style.display = 'none';
+            statusEl.innerHTML = msg + " • <b>HOLD CUBE</b> to Control";
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.minFilter = THREE.LinearFilter;
+            const mat = new THREE.MeshBasicMaterial({ map: texture });
+            scene.add(new THREE.Mesh(sphereGeo, mat));
+        }
 
-/* =========================
-   BACK CAMERA STREAM
-========================= */
+        // --- 3. MOVEMENT LOGIC ---
+        let lon = 0, lat = 0;
+        let phi = 0, theta = 0;
+        
+        // Touch Drag Logic
+        let isUserInteracting = false;
+        let onPointerDownPointerX = 0, onPointerDownPointerY = 0;
+        let onPointerDownLon = 0, onPointerDownLat = 0;
 
-const video = document.getElementById("video")
+        document.addEventListener('pointerdown', (e) => {
+            if(e.target.closest('#ctrlBtn')) return; // Ignore if touching cube
+            isUserInteracting = true;
+            onPointerDownPointerX = e.clientX;
+            onPointerDownPointerY = e.clientY;
+            onPointerDownLon = lon;
+            onPointerDownLat = lat;
+        });
+        document.addEventListener('pointermove', (e) => {
+            if(!isUserInteracting) return;
+            lon = (onPointerDownPointerX - e.clientX) * 0.15 + onPointerDownLon;
+            lat = (e.clientY - onPointerDownPointerY) * 0.15 + onPointerDownLat;
+        });
+        document.addEventListener('pointerup', () => isUserInteracting = false);
 
-navigator.mediaDevices.getUserMedia({
-  video: { facingMode: { exact: "environment" } },
-  audio: false
-}).then(stream => {
-  video.srcObject = stream
-}).catch(() => {
-  // fallback
-  navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => video.srcObject = stream)
-})
+        // --- 4. ACCELEROMETER "JOYSTICK" ---
+        const btn = document.getElementById('ctrlBtn');
+        const cubeVis = document.getElementById('cube');
+        
+        let isHolding = false;
+        let calibX = 0, calibY = 0; // The "Zero" point
+        let currX = 0, currY = 0;   // Current filtered sensor data
 
-/* =========================
-   OPTICAL FLOW TRACKING
-========================= */
+        // Permission & Start
+        const startSensor = async () => {
+            if(isHolding) return;
+            
+            // iOS Permission Check
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                try {
+                    const resp = await DeviceMotionEvent.requestPermission();
+                    if (resp !== 'granted') { alert("Permission Denied"); return; }
+                } catch(e) {}
+            }
 
-let yaw = 0
-let pitch = 0
+            isHolding = true;
+            btn.classList.add('active');
+            statusEl.innerText = "SENSORS ACTIVE: Tilt to Rotate";
+            
+            // Listen
+            window.addEventListener('devicemotion', handleMotion, true);
+            
+            // CALIBRATE: Set current position as 0 immediately
+            calibX = null; 
+        };
 
-let lastGray = null
-let ready = false
+        const stopSensor = () => {
+            isHolding = false;
+            btn.classList.remove('active');
+            statusEl.innerHTML = "Drag screen to look • <b>HOLD CUBE</b> to tilt-control";
+            window.removeEventListener('devicemotion', handleMotion, true);
+            
+            // Reset Cube Visual
+            cubeVis.style.transform = '';
+        };
 
-const cvCanvas = document.getElementById("cv")
-const ctx = cvCanvas.getContext("2d")
+        btn.addEventListener('pointerdown', startSensor);
+        btn.addEventListener('pointerup', stopSensor);
+        btn.addEventListener('pointerleave', stopSensor);
 
-function processFrame() {
-  if (!ready || video.videoWidth === 0) return
+        function handleMotion(event) {
+            const acc = event.accelerationIncludingGravity;
+            if(!acc) return;
 
-  cvCanvas.width = 320
-  cvCanvas.height = 240
+            // Low Pass Filter (Smooth the jitter)
+            // 0.2 means "Update by 20% of new value"
+            const alpha = 0.2; 
+            
+            // Note: Orientation logic varies by device. 
+            // Standard Portrait: X=Left/Right, Y=Up/Down, Z=Face
+            
+            // Init Calibration if first frame
+            if (calibX === null) {
+                currX = acc.x; 
+                currY = acc.y;
+                calibX = currX;
+                calibY = currY;
+                return;
+            }
 
-  ctx.drawImage(video, 0, 0, 320, 240)
+            // Smooth updates
+            currX += alpha * (acc.x - currX);
+            currY += alpha * (acc.y - currY);
 
-  const src = cv.imread(cvCanvas)
-  const gray = new cv.Mat()
-  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+            // --- CALCULATE DELTA (How far are we tilting from start?) ---
+            const deltaX = currX - calibX; // Left/Right tilt
+            const deltaY = currY - calibY; // Up/Down tilt
 
-  if (lastGray) {
-    const flow = new cv.Mat()
-    cv.calcOpticalFlowFarneback(
-      lastGray, gray, flow,
-      0.5, 3, 15, 3, 5, 1.2, 0
-    )
+            // --- VISUALIZE ON CUBE ---
+            // Simply map the delta to rotation
+            cubeVis.style.transform = `rotateX(${-deltaY * 10}deg) rotateY(${deltaX * 10}deg)`;
 
-    let dx = 0, dy = 0, count = 0
+            // --- APPLY TO CAMERA (Velocity) ---
+            const deadzone = 0.3; // Small movements do nothing
+            const speed = 1.0;
 
-    for (let y = 0; y < flow.rows; y += 10) {
-      for (let x = 0; x < flow.cols; x += 10) {
-        const f = flow.floatAt(y, x * 2)
-        dx += f
-        dy += flow.floatAt(y, x * 2 + 1)
-        count++
-      }
-    }
+            // Yaw (Left/Right) - X axis gravity
+            if(Math.abs(deltaX) > deadzone) {
+                lon += deltaX * speed;
+            }
 
-    dx /= count
-    dy /= count
+            // Pitch (Up/Down) - Y axis gravity
+            if(Math.abs(deltaY) > deadzone) {
+                // Invert Y typically feels more natural (Tilt back to look up)
+                lat -= deltaY * speed; 
+            }
+        }
 
-    yaw   -= dx * 0.04
-    pitch -= dy * 0.04
+        // --- 5. RENDER LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
 
-    pitch = Math.max(-1.3, Math.min(1.3, pitch))
+            // Lat clamping? No, user wants full 360.
+            // Just prevent math errors at poles
+            // lat = Math.max(-85, Math.min(85, lat)); 
 
-    flow.delete()
-    lastGray.delete()
-  }
+            phi = THREE.MathUtils.degToRad(90 - lat);
+            theta = THREE.MathUtils.degToRad(lon);
 
-  lastGray = gray
-  src.delete()
-}
+            const x = 500 * Math.sin(phi) * Math.cos(theta);
+            const y = 500 * Math.cos(phi);
+            const z = 500 * Math.sin(phi) * Math.sin(theta);
 
-/* =========================
-   MAIN LOOP
-========================= */
+            camera.lookAt(x, y, z);
+            renderer.render(scene, camera);
+        }
 
-function animate() {
-  requestAnimationFrame(animate)
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
 
-  processFrame()
-
-  camera.rotation.y += (yaw - camera.rotation.y) * 0.08
-  camera.rotation.x += (pitch - camera.rotation.x) * 0.08
-
-  renderer.render(scene, camera)
-}
-
-cv['onRuntimeInitialized'] = () => {
-  ready = true
-  animate()
-}
-
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight
-  camera.updateProjectionMatrix()
-  renderer.setSize(window.innerWidth, window.innerHeight)
-})
-</script>
-
+        animate();
+    </script>
 </body>
 </html>
