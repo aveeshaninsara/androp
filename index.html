@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grid 360 Controller</title>
+    <title>Immersive Globe Hand Tracker</title>
     <style>
         body {
             margin: 0;
@@ -12,351 +12,265 @@
             font-family: 'Courier New', Courier, monospace;
         }
 
-        /* FULLSCREEN CANVAS */
-        #container {
+        /* The 3D Canvas */
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100vw;
             height: 100vh;
-            position: absolute;
-            top: 0;
-            left: 0;
             z-index: 1;
-            background: radial-gradient(circle at center, #111 0%, #000 100%);
         }
 
-        /* UI OVERLAY */
+        /* Debug/Status Overlay */
         #ui-layer {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
+            top: 10px;
+            left: 10px;
             z-index: 10;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
-
-        /* STATUS BAR */
-        #status {
-            background: rgba(0, 255, 0, 0.1);
             color: #0f0;
-            padding: 15px;
-            text-align: center;
-            font-size: 14px;
-            border-bottom: 1px solid #0f0;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            text-shadow: 0 0 5px #0f0;
-            pointer-events: auto;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
         }
 
-        /* BOTTOM CONTROLS */
-        .controls {
-            padding-bottom: 60px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        /* Crosshair to help user find center */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
             pointer-events: none;
         }
 
-        /* CUBE BUTTON */
-        .scene-container {
-            width: 80px;
-            height: 80px;
-            perspective: 800px;
-            pointer-events: auto; /* Enable clicks */
-            cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .cube {
-            width: 100%;
-            height: 100%;
-            position: relative;
-            transform-style: preserve-3d;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            animation: idleSpin 10s infinite linear;
-        }
-
-        @keyframes idleSpin {
-            0% { transform: rotateX(-20deg) rotateY(0deg); }
-            100% { transform: rotateX(-20deg) rotateY(360deg); }
-        }
-
-        .cube-face {
+        /* Visual representation of the hand center */
+        #hand-cursor {
             position: absolute;
-            width: 80px;
-            height: 80px;
-            border: 2px solid #0f0;
-            background: rgba(0, 20, 0, 0.85);
-            box-shadow: 0 0 10px rgba(0, 255, 0, 0.4) inset;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            color: #0f0;
-            font-weight: bold;
-            user-select: none;
-            backface-visibility: hidden;
+            width: 10px;
+            height: 10px;
+            background-color: red;
+            border-radius: 50%;
+            z-index: 6;
+            display: none;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px red;
         }
 
-        /* POSITIONS */
-        .face-front  { transform: rotateY(  0deg) translateZ(40px); }
-        .face-right  { transform: rotateY( 90deg) translateZ(40px); }
-        .face-back   { transform: rotateY(180deg) translateZ(40px); }
-        .face-left   { transform: rotateY(-90deg) translateZ(40px); }
-        .face-top    { transform: rotateX( 90deg) translateZ(40px); }
-        .face-bottom { transform: rotateX(-90deg) translateZ(40px); }
-
-        /* ACTIVE STATE (ON) */
-        .active-state .cube {
-            animation: none;
+        /* Hide the webcam video element, we only need the data */
+        .input_video {
+            display: none;
         }
-        .active-state .cube-face {
-            border-color: #ff0055;
-            color: #ff0055;
-            background: rgba(40, 0, 10, 0.9);
-            box-shadow: 0 0 20px #ff0055;
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            z-index: 20;
         }
     </style>
 </head>
 <body>
 
-    <div id="container"></div>
-
+    <div id="loading">Loading AI & 3D Engine...</div>
+    
     <div id="ui-layer">
-        <div id="status">TAP CUBE TO ACTIVATE SENSOR</div>
-        
-        <div class="controls">
-            <div class="scene-container" id="toggleBtn">
-                <div class="cube" id="cubeVis">
-                    <div class="cube-face face-front">OFF</div>
-                    <div class="cube-face face-back">ON</div>
-                    <div class="cube-face face-right">►</div>
-                    <div class="cube-face face-left">◄</div>
-                    <div class="cube-face face-top">▲</div>
-                    <div class="cube-face face-bottom">▼</div>
-                </div>
-            </div>
-        </div>
+        <div><strong>Status:</strong> <span id="status-text">Waiting for hand...</span></div>
+        <div><strong>Action:</strong> <span id="action-text">None</span></div>
+        <div style="font-size: 10px; margin-top:5px;">Keep hand visible. Pinch to Zoom In. Point 1 finger to Zoom Out.</div>
     </div>
 
-    <!-- THREE.JS -->
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-            }
-        }
-    </script>
+    <div id="crosshair"></div>
+    <div id="hand-cursor"></div>
+    <div id="canvas-container"></div>
 
-    <script type="module">
-        import * as THREE from 'three';
+    <!-- Video element for MediaPipe input -->
+    <video class="input_video"></video>
 
-        // --- 1. SETUP SCENE ---
-        const container = document.getElementById('container');
-        const statusEl = document.getElementById('status');
-        
+    <!-- Import Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Import MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script>
+        // --- THREE.JS SETUP (The Globe) ---
+        const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        // Add some fog for depth
-        scene.fog = new THREE.FogExp2(0x000000, 0.0015);
-
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
         
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        // Camera setup
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 0.1); // Slightly offset from exact center
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
         container.appendChild(renderer.domElement);
 
-        // --- 2. CREATE THE GRID (REPLACING THE IMAGE) ---
-        // We use a large sphere with wireframe to create a 360 grid effect
-        const geometry = new THREE.SphereGeometry(600, 40, 24);
-        geometry.scale(-1, 1, 1); // Invert so we are inside
-
-        const material = new THREE.MeshBasicMaterial({
-            color: 0x00ff00,    // Matrix Green
-            wireframe: true,
-            transparent: true,
-            opacity: 0.3
-        });
-
-        const gridMesh = new THREE.Mesh(geometry, material);
-        scene.add(gridMesh);
-
-        // Add a secondary grid for visual complexity
-        const subGeo = new THREE.SphereGeometry(550, 80, 48);
-        subGeo.scale(-1, 1, 1);
-        const subMat = new THREE.MeshBasicMaterial({
-            color: 0x004400,
-            wireframe: true,
-            transparent: true,
-            opacity: 0.1
-        });
-        scene.add(new THREE.Mesh(subGeo, subMat));
-
-
-        // --- 3. MOVEMENT VARIABLES ---
-        let lon = 0, lat = 0; // Camera angles
-        let phi = 0, theta = 0;
+        // Create the Sphere (The Globe)
+        const geometry = new THREE.SphereGeometry(50, 60, 40);
         
-        // Manual Drag
-        let isUserInteracting = false;
-        let onPointerDownPointerX = 0, onPointerDownPointerY = 0;
-        let onPointerDownLon = 0, onPointerDownLat = 0;
+        // Invert the geometry so textures appear on the inside
+        geometry.scale(-1, 1, 1);
 
-        // Sensor State
-        let isSensorActive = false;
-        
-        // Calibration (The "Zero" Point)
-        let calibX = 0, calibY = 0;
-        let currentX = 0, currentY = 0;
+        // Load a texture (High Res Earth Map)
+        const textureLoader = new THREE.TextureLoader();
+        // Using a reliable NASA derived texture hosted by ThreeJS examples or similar
+        const texture = textureLoader.load('https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Aurora_as_seen_by_IMAGE_satellite_in_UV_flooded.jpg/1280px-Aurora_as_seen_by_IMAGE_satellite_in_UV_flooded.jpg', 
+            () => { document.getElementById('loading').style.display = 'none'; },
+            undefined,
+            (err) => { console.error("Texture error", err); }
+        ); 
+        // Note: You can replace the URL above with any equirectangular projection map (360 photo)
 
-        // --- 4. TOUCH INTERACTION (DRAG) ---
-        document.addEventListener('pointerdown', (e) => {
-            if (e.target.closest('#toggleBtn')) return; // Ignore cube clicks
-            isUserInteracting = true;
-            onPointerDownPointerX = e.clientX;
-            onPointerDownPointerY = e.clientY;
-            onPointerDownLon = lon;
-            onPointerDownLat = lat;
-        });
+        const material = new THREE.MeshBasicMaterial({ map: texture });
+        const sphere = new THREE.Mesh(geometry, material);
+        scene.add(sphere);
 
-        document.addEventListener('pointermove', (e) => {
-            if (!isUserInteracting) return;
-            lon = (onPointerDownPointerX - e.clientX) * 0.1 + onPointerDownLon;
-            lat = (e.clientY - onPointerDownPointerY) * 0.1 + onPointerDownLat;
-        });
-
-        document.addEventListener('pointerup', () => isUserInteracting = false);
-
-
-        // --- 5. SENSOR LOGIC (TOGGLE) ---
-        const toggleBtn = document.getElementById('toggleBtn');
-        const cubeVis = document.getElementById('cubeVis');
-
-        toggleBtn.addEventListener('click', async () => {
-            
-            // Check iOS Permissions on first click
-            if (!isSensorActive && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-                try {
-                    const response = await DeviceMotionEvent.requestPermission();
-                    if (response !== 'granted') {
-                        statusEl.innerText = "PERMISSION DENIED";
-                        return;
-                    }
-                } catch (e) {
-                    console.error(e);
-                }
-            }
-
-            // TOGGLE STATE
-            isSensorActive = !isSensorActive;
-
-            if (isSensorActive) {
-                // ACTIVATED
-                toggleBtn.classList.add('active-state');
-                statusEl.innerHTML = "SENSOR ON <br> <span style='font-size:10px'>Hold steady to calibrate...</span>";
-                
-                // Reset calibration triggers
-                calibX = null; 
-                
-                window.addEventListener('devicemotion', handleMotion, true);
-
-            } else {
-                // DEACTIVATED
-                toggleBtn.classList.remove('active-state');
-                statusEl.innerText = "SENSOR OFF (Tap Cube)";
-                
-                window.removeEventListener('devicemotion', handleMotion, true);
-                
-                // Reset Cube Visual
-                cubeVis.style.transform = '';
-            }
-        });
-
-        function handleMotion(event) {
-            const acc = event.accelerationIncludingGravity;
-            if (!acc) return;
-
-            // Low Pass Filter (Smooths out jitter)
-            const alpha = 0.15;
-
-            // Capture initial state as "Zero" if newly activated
-            if (calibX === null) {
-                calibX = acc.x;
-                calibY = acc.y;
-                currentX = acc.x;
-                currentY = acc.y;
-                statusEl.innerText = "SENSOR ACTIVE - TILT TO MOVE";
-                return;
-            }
-
-            // Apply smoothing
-            currentX += alpha * (acc.x - currentX);
-            currentY += alpha * (acc.y - currentY);
-
-            // Calculate Difference from Calibration Point
-            const deltaX = currentX - calibX; // Left/Right Tilt
-            const deltaY = currentY - calibY; // Up/Down Tilt
-
-            // VISUALIZE ON CUBE
-            cubeVis.style.transform = `rotateX(${-deltaY * 15}deg) rotateY(${deltaX * 15}deg)`;
-
-            // APPLY TO CAMERA
-            const deadzone = 0.5; // Minimum tilt required to move
-            const speed = 1.2;
-
-            // Yaw (Left/Right)
-            if (Math.abs(deltaX) > deadzone) {
-                lon += deltaX * speed;
-            }
-
-            // Pitch (Up/Down)
-            // LOGIC: "When device moves UP, move grid DOWN"
-            // If I tilt device UP (Top Back), deltaY usually changes.
-            // Standard Camera: Look UP -> Lat INCREASES -> Grid moves DOWN visually.
-            // We subtract deltaY (depending on device orientation standard, Y is usually negative when upright).
-            // We will use standard flight control: Pull Back (Tilt Up) -> Look Up.
-            
-            if (Math.abs(deltaY) > deadzone) {
-                // 'lat' controls Looking Up/Down.
-                // Subtracting deltaY usually maps Tilt Back -> Look Up
-                lat -= deltaY * speed; 
-            }
-        }
-
-        // --- 6. RENDER LOOP ---
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // Calculate 3D Point
-            lat = Math.max(-85, Math.min(85, lat)); // Prevent full flip
-            phi = THREE.MathUtils.degToRad(90 - lat);
-            theta = THREE.MathUtils.degToRad(lon);
-
-            const x = 500 * Math.sin(phi) * Math.cos(theta);
-            const y = 500 * Math.cos(phi);
-            const z = 500 * Math.sin(phi) * Math.sin(theta);
-
-            camera.lookAt(x, y, z);
-
-            // Rotate grid slightly for effect
-            if (!isSensorActive && !isUserInteracting) {
-                lon += 0.05; // Auto rotate very slowly if idle
-            }
-
-            renderer.render(scene, camera);
-        }
-
-        // Resize Handler
+        // Resize handler
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        animate();
+        // --- MEDIAPIPE HANDS SETUP ---
+        const videoElement = document.getElementsByClassName('input_video')[0];
+        const statusText = document.getElementById('status-text');
+        const actionText = document.getElementById('action-text');
+        const handCursor = document.getElementById('hand-cursor');
+
+        // Configuration for sensitivity
+        const DEAD_ZONE = 0.1; // Amount hand needs to move from center to trigger rotation
+        const ROTATION_SPEED = 0.03;
+        const ZOOM_SPEED = 0.5;
+        
+        let targetRotationX = 0;
+        let targetRotationY = 0;
+
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                statusText.innerText = "Hand Detected";
+                statusText.style.color = "#0f0";
+                
+                // We only track the first hand detected
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // 1. Calculate Center of Hand (Wrist is index 0, Middle Finger MCP is 9)
+                // Using index 9 (Middle Finger Base) is usually more stable for aiming
+                const handX = 1.0 - landmarks[9].x; // Flip X because webcam is mirrored
+                const handY = landmarks[9].y;
+
+                // Update Visual Cursor
+                handCursor.style.display = "block";
+                handCursor.style.left = (handX * 100) + "%";
+                handCursor.style.top = (handY * 100) + "%";
+
+                // 2. Logic: Rotation (Movement from Center)
+                const centerX = 0.5;
+                const centerY = 0.5;
+                
+                let deltaX = handX - centerX;
+                let deltaY = handY - centerY;
+
+                // Apply Deadzone
+                if (Math.abs(deltaX) < DEAD_ZONE) deltaX = 0;
+                else deltaX = (deltaX > 0 ? deltaX - DEAD_ZONE : deltaX + DEAD_ZONE);
+
+                if (Math.abs(deltaY) < DEAD_ZONE) deltaY = 0;
+                else deltaY = (deltaY > 0 ? deltaY - DEAD_ZONE : deltaY + DEAD_ZONE);
+
+                sphere.rotation.y += deltaX * ROTATION_SPEED * 5; // Left/Right
+                sphere.rotation.x += deltaY * ROTATION_SPEED * 5; // Up/Down
+
+                // 3. Logic: Gestures (Pinch vs 1 Finger)
+                
+                // Calculate distance between Index Tip (8) and Thumb Tip (4)
+                const thumbTip = landmarks[4];
+                const indexTip = landmarks[8];
+                const middleTip = landmarks[12];
+                const ringTip = landmarks[16];
+                const pinkyTip = landmarks[20];
+                const wrist = landmarks[0];
+
+                const pinchDist = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+                
+                // Check if other fingers are folded (simple check: tip is lower than lower joint? 
+                // Easier check: distance from wrist. If Tip is close to wrist, it's folded).
+                // Here we use a simplified check for "1 Finger Pointing"
+                // Condition: Index extended, Middle/Ring/Pinky folded (close to wrist)
+                
+                const isPinching = pinchDist < 0.05;
+                
+                // Simple logic for 1 finger: Index is high (y is low), others are low (y is high) relative to wrist?
+                // Actually, let's just use Euclidean distance from wrist to determine folded vs extended
+                // This is a rough estimation but works for simple triggers
+                const dWristIndex = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y);
+                const dWristMiddle = Math.hypot(middleTip.x - wrist.x, middleTip.y - wrist.y);
+                
+                // "1 Finger" heuristic: Index extended (far from wrist) AND Middle folded (closer to wrist) AND not pinching
+                const isOneFinger = (dWristIndex > 0.15) && (dWristMiddle < 0.15) && !isPinching;
+
+                if (isPinching) {
+                    actionText.innerText = "PINCH (Zoom In)";
+                    actionText.style.color = "cyan";
+                    // Zoom In (Decrease FOV)
+                    camera.fov = Math.max(10, camera.fov - ZOOM_SPEED);
+                    camera.updateProjectionMatrix();
+                } else if (isOneFinger) {
+                    actionText.innerText = "POINTING (Zoom Out)";
+                    actionText.style.color = "yellow";
+                    // Zoom Out (Increase FOV)
+                    camera.fov = Math.min(120, camera.fov + ZOOM_SPEED);
+                    camera.updateProjectionMatrix();
+                } else {
+                    actionText.innerText = "Neutral";
+                    actionText.style.color = "white";
+                }
+
+            } else {
+                statusText.innerText = "No Hand Detected";
+                statusText.style.color = "red";
+                actionText.innerText = "-";
+                handCursor.style.display = "none";
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const cameraFeed = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+
+        cameraFeed.start();
 
     </script>
 </body>
