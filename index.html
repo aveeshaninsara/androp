@@ -2,605 +2,304 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Globe 360 Builder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>360 View + Accelerometer Control</title>
     <style>
-        /* --- RESET --- */
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Segoe UI', Roboto, sans-serif; touch-action: none; }
-
-        /* --- LAYERS --- */
-        /* 1. Camera Feed (Mirrored for selfie-feel) */
-        #webcam {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: cover; transform: scaleX(-1); z-index: 0;
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: sans-serif;
         }
 
-        /* 2. 3D Scene */
-        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-
-        /* 3. UI Overlay */
-        #ui-layer {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 10; pointer-events: none;
-            display: flex; flex-direction: column; justify-content: space-between;
+        #container {
+            width: 100vw;
+            height: 100vh;
         }
 
-        /* --- UI COMPONENTS --- */
+        /* --- THE CUBE BUTTON CSS --- */
+        .scene-container {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 60px;
+            perspective: 400px;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        .cube {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: spin 5s infinite linear;
+            transition: transform 0.5s;
+        }
+
+        .cube-face {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border: 2px solid #00ffcc;
+            background: rgba(0, 255, 204, 0.2);
+            box-shadow: 0 0 10px #00ffcc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: white;
+            font-weight: bold;
+            text-transform: uppercase;
+            user-select: none;
+        }
+
+        .face-front  { transform: rotateY(  0deg) translateZ(30px); }
+        .face-right  { transform: rotateY( 90deg) translateZ(30px); }
+        .face-back   { transform: rotateY(180deg) translateZ(30px); }
+        .face-left   { transform: rotateY(-90deg) translateZ(30px); }
+        .face-top    { transform: rotateX( 90deg) translateZ(30px); }
+        .face-bottom { transform: rotateX(-90deg) translateZ(30px); }
+
+        @keyframes spin {
+            from { transform: rotateX(-20deg) rotateY(0deg); }
+            to { transform: rotateX(-20deg) rotateY(360deg); }
+        }
+
+        .active-state .cube {
+            animation: none;
+            transform: rotateX(0) rotateY(0);
+            border-color: #ff0055;
+        }
         
-        /* Reticle (16:9 Fixed) */
-        .reticle-box {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 85vw; height: 47.8vw; /* 16:9 Ratio */
-            max-width: 500px; max-height: 281px;
-            border: 2px solid rgba(255, 255, 255, 0.8);
-            border-radius: 12px;
-            box-shadow: 0 0 0 100vmax rgba(0,0,0,0.6); /* Darken surroundings */
+        .active-state .cube-face {
+            border-color: #ff0055;
+            background: rgba(255, 0, 85, 0.2);
+            box-shadow: 0 0 15px #ff0055;
+        }
+
+        #status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #00ffcc;
+            background: rgba(0,0,0,0.5);
+            padding: 5px;
             pointer-events: none;
-            transition: border-color 0.3s;
+            font-size: 12px;
         }
-        .reticle-box.active { border-color: #00d2d3; box-shadow: 0 0 0 100vmax rgba(0,0,0,0.8); }
-
-        /* Instructions */
-        .top-hud {
-            text-align: center; padding: 20px; pointer-events: auto;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
-        }
-        .step-indicator {
-            color: #00d2d3; font-size: 18px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;
-            text-shadow: 0 2px 4px black; margin-bottom: 5px;
-        }
-        .instruction { color: white; font-size: 14px; opacity: 0.9; }
-
-        /* Directional Arrows */
-        .arrow {
-            position: absolute; color: white; font-size: 40px; font-weight: bold;
-            opacity: 0; transition: opacity 0.3s; animation: bounce 1s infinite;
-            text-shadow: 0 0 10px #00d2d3;
-        }
-        .arrow.visible { opacity: 1; }
-        .arrow-right { top: 50%; right: 20px; transform: translateY(-50%); }
-        .arrow-left { top: 50%; left: 20px; transform: translateY(-50%); }
-        .arrow-up { top: 20px; left: 50%; transform: translateX(-50%) rotate(-90deg); }
-        .arrow-down { bottom: 140px; left: 50%; transform: translateX(-50%) rotate(90deg); } /* Above controls */
-
-        @keyframes bounce { 50% { transform: scale(1.2) translate(var(--tx, 0), var(--ty, 0)); } }
-
-        /* Controls */
-        .controls-area {
-            padding: 30px; display: flex; justify-content: center; align-items: center; gap: 20px;
-            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); pointer-events: auto;
-        }
-
-        #btn-capture {
-            width: 80px; height: 80px; border-radius: 50%;
-            border: 4px solid white; background: rgba(255,255,255,0.2);
-            position: relative; cursor: pointer; transition: 0.2s;
-        }
-        #btn-capture::after {
-            content:''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-            width: 60px; height: 60px; background: white; border-radius: 50%;
-        }
-        #btn-capture:active { transform: scale(0.95); }
-        #btn-capture.disabled { opacity: 0.3; pointer-events: none; border-color: #555; }
-        #btn-capture.disabled::after { background: #555; }
-
-        .btn-pill {
-            padding: 12px 30px; border-radius: 30px; border: none; font-weight: bold; font-size: 16px;
-            background: #00d2d3; color: #000; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-        }
-        
-        /* Screens */
-        #gallery-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #121212; z-index: 50; display: flex; flex-direction: column;
-            transition: transform 0.3s ease-in-out;
-        }
-        #gallery-screen.hidden { transform: translateY(100%); }
-
-        .gallery-header { padding: 20px; display: flex; justify-content: space-between; align-items: center; background: #1f1f1f; }
-        .gallery-content { flex: 1; overflow-y: auto; padding: 15px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-        
-        .gallery-card {
-            background: #2a2a2a; border-radius: 10px; overflow: hidden; position: relative; aspect-ratio: 16/9;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        }
-        .gallery-card img { width: 100%; height: 100%; object-fit: cover; }
-        .btn-delete {
-            position: absolute; top: 5px; right: 5px; width: 30px; height: 30px;
-            background: rgba(255,0,0,0.8); color: white; border: none; border-radius: 50%;
-            font-weight: bold; cursor: pointer; z-index: 2;
-        }
-
-        /* Toast */
-        #toast {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.85); color: #fff; padding: 15px 30px;
-            border-radius: 8px; font-size: 16px; pointer-events: none; z-index: 100;
-            opacity: 0; transition: opacity 0.3s; text-align: center;
-        }
-
     </style>
 </head>
 <body>
 
-    <!-- GALLERY SCREEN -->
-    <div id="gallery-screen">
-        <div class="gallery-header">
-            <h2 style="color:white; margin:0;">My Globes</h2>
-        </div>
-        <div class="gallery-content" id="gallery-list">
-            <!-- Items go here -->
-        </div>
-        <div style="padding: 20px; text-align: center;">
-            <button class="btn-pill" id="btn-start-new" style="width:100%; max-width: 300px;">START NEW CAPTURE</button>
-        </div>
-    </div>
+    <div id="status">Touch Cube to Enable Sensors</div>
+    <div id="container"></div>
 
-    <!-- MAIN APP -->
-    <video id="webcam" playsinline muted autoplay></video>
-    <div id="canvas-container"></div>
-
-    <div id="ui-layer" style="display:none;">
-        <div class="top-hud">
-            <button id="btn-home" style="position:absolute; top:15px; left:15px; background:rgba(255,255,255,0.2); color:white; border:1px solid white; padding:5px 10px; border-radius:5px;">🏠 Home</button>
-            <div class="step-indicator" id="step-label">FACE 1: FRONT</div>
-            <div class="instruction" id="step-desc">Align green box and Capture</div>
-        </div>
-
-        <div class="reticle-box" id="reticle"></div>
-
-        <!-- Arrows -->
-        <div class="arrow arrow-right">➤</div>
-        <div class="arrow arrow-left">➤</div> <!-- Rotated via class -->
-        <div class="arrow arrow-up">➤</div>
-        <div class="arrow arrow-down">➤</div>
-
-        <div class="controls-area">
-            <div id="btn-capture"></div>
-            <button class="btn-pill" id="btn-finish" style="display:none; background:#2ecc71;">FINISH & VIEW</button>
+    <!-- The Cube Button -->
+    <div class="scene-container" id="sensorBtn">
+        <div class="cube">
+            <div class="cube-face face-front">Touch</div>
+            <div class="cube-face face-back">Me</div>
+            <div class="cube-face face-right">X</div>
+            <div class="cube-face face-left">Y</div>
+            <div class="cube-face face-top">Z</div>
+            <div class="cube-face face-bottom">G</div>
         </div>
     </div>
 
-    <div id="toast">Saved!</div>
-
-    <!-- THREE JS -->
+    <!-- Import Three.js via Module -->
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
             }
         }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- CONFIG ---
-        // The order is Critical for the logic: Front -> Right -> Back -> Left -> Top -> Bottom
-        const STEPS = [
-            { name: "FRONT", id: 4, next: 'right' },  // Face 4 is Front in BoxGeo
-            { name: "RIGHT", id: 0, next: 'right' },  // Face 0 is Right
-            { name: "BACK",  id: 5, next: 'right' },  // Face 5 is Back
-            { name: "LEFT",  id: 1, next: 'up' },     // Face 1 is Left
-            { name: "TOP",   id: 2, next: 'down' },   // Face 2 is Top
-            { name: "BOTTOM",id: 3, next: 'finish' }  // Face 3 is Bottom
-        ];
+        // --- 1. SETUP THREE.JS SCENE ---
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
 
-        let currentStepIndex = 0;
-        let capturedTextures = new Array(6).fill(null);
-        let scene, camera, renderer, controls;
-        let captureGroup; // Holds the wireframe and the faces
-        let viewerSphere; 
-        let materials = [];
+        // Camera Setup
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.target = new THREE.Vector3(0, 0, 0);
 
-        // DOM
-        const video = document.getElementById('webcam');
-        const galleryScreen = document.getElementById('gallery-screen');
-        const uiLayer = document.getElementById('ui-layer');
-        const btnCapture = document.getElementById('btn-capture');
-        const btnFinish = document.getElementById('btn-finish');
-        const stepLabel = document.getElementById('step-label');
-        const stepDesc = document.getElementById('step-desc');
-        const reticle = document.getElementById('reticle');
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
 
-        // --- INIT ---
-        initGallery();
-        initThree();
+        // --- 2. CREATE THE 360 SPHERE ---
+        const geometry = new THREE.SphereGeometry(500, 60, 40);
+        // Invert geometry so we view it from the inside
+        geometry.scale(-1, 1, 1);
 
-        // --- EVENT LISTENERS ---
-        document.getElementById('btn-start-new').addEventListener('click', startSession);
-        document.getElementById('btn-home').addEventListener('click', goHome);
-        btnCapture.addEventListener('click', handleCapture);
-        btnFinish.addEventListener('click', finalizeGlobe);
+        // Load Texture
+        const textureLoader = new THREE.TextureLoader();
+        // Use CrossOrigin anonymous to handle external images
+        textureLoader.setCrossOrigin('anonymous');
+        
+        const imageUrl = 'https://storage.noirlab.edu/media/archives/images/thumb300y/20220407_Pachon_P35mm_SOARG_L_Fulld1-CC.jpg';
+        
+        const texture = textureLoader.load(imageUrl);
+        texture.colorSpace = THREE.SRGBColorSpace;
 
-        // --- THREE.JS SETUP ---
-        function initThree() {
-            scene = new THREE.Scene();
-            scene.background = null; // See through to video
+        const material = new THREE.MeshBasicMaterial({ map: texture });
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 0, 0.1); // Center
+        // Variables for rotation
+        let lon = 0, lat = 0;
+        let phi = 0, theta = 0;
+        let isUserInteracting = false;
+        let onPointerDownPointerX = 0, onPointerDownPointerY = 0;
+        let onPointerDownLon = 0, onPointerDownLat = 0;
 
-            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.getElementById('canvas-container').appendChild(renderer.domElement);
+        // Accelerometer Variables
+        let useSensor = false;
+        let accelX = 0, accelY = 0, accelZ = 0;
 
-            controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableZoom = false;
-            controls.enablePan = false;
-            controls.rotateSpeed = -0.5; // Invert drag for "inside" feel
-            controls.enableDamping = true;
+        // --- 3. INPUT HANDLERS (MOUSE/TOUCH) ---
+        // This allows dragging the screen manually if sensors aren't used
+        document.addEventListener('pointerdown', onPointerDown);
+        document.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', onPointerUp);
+        document.addEventListener('wheel', onDocumentMouseWheel);
 
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-
-            animate();
+        function onPointerDown(event) {
+            if (event.isPrimary === false) return;
+            isUserInteracting = true;
+            onPointerDownPointerX = event.clientX;
+            onPointerDownPointerY = event.clientY;
+            onPointerDownLon = lon;
+            onPointerDownLat = lat;
         }
 
-        // --- SESSION LOGIC ---
-        async function startSession() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment', aspectRatio: 16/9 } 
-                });
-                video.srcObject = stream;
-                await video.play();
-
-                // UI Reset
-                galleryScreen.classList.add('hidden');
-                uiLayer.style.display = 'flex';
-                btnFinish.style.display = 'none';
-                btnCapture.style.display = 'block';
-                currentStepIndex = 0;
-                capturedTextures = new Array(6).fill(null);
-                
-                setupCaptureEnvironment();
-                updateStepUI();
-
-            } catch (e) {
-                alert("Camera Error: " + e.message);
-            }
+        function onPointerMove(event) {
+            if (event.isPrimary === false || !isUserInteracting) return;
+            lon = (onPointerDownPointerX - event.clientX) * 0.1 + onPointerDownLon;
+            lat = (event.clientY - onPointerDownPointerY) * 0.1 + onPointerDownLat;
         }
 
-        function goHome() {
-            galleryScreen.classList.remove('hidden');
-            uiLayer.style.display = 'none';
-            if(video.srcObject) {
-                video.srcObject.getTracks().forEach(t => t.stop());
-            }
-            if(viewerSphere) scene.remove(viewerSphere);
-            if(captureGroup) scene.remove(captureGroup);
+        function onPointerUp() { isUserInteracting = false; }
+
+        function onDocumentMouseWheel(event) {
+            const fov = camera.fov + event.deltaY * 0.05;
+            camera.fov = THREE.MathUtils.clamp(fov, 10, 75);
+            camera.updateProjectionMatrix();
         }
 
-        // --- CAPTURE ENVIRONMENT (Cube Logic, Sphere Visual) ---
-        function setupCaptureEnvironment() {
-            if(captureGroup) scene.remove(captureGroup);
-            if(viewerSphere) scene.remove(viewerSphere);
-            
-            captureGroup = new THREE.Group();
-            
-            // 1. The WIREFRAME GLOBE (Visual Guide)
-            // User requested "NOT A CUBE". So we show a Sphere wireframe.
-            const sphereGeo = new THREE.SphereGeometry(12, 16, 16);
-            const wireframe = new THREE.LineSegments(
-                new THREE.WireframeGeometry(sphereGeo),
-                new THREE.LineBasicMaterial({ color: 0x444444, transparent: true, opacity: 0.3 })
-            );
-            captureGroup.add(wireframe);
+        // --- 4. ACCELEROMETER LOGIC (THE REQUEST) ---
+        const btn = document.getElementById('sensorBtn');
+        const status = document.getElementById('status');
 
-            // 2. The CAPTURE FACES (The logic)
-            // We use BoxGeometry because that's how we stitch images without warping.
-            // But we hide the edges and make it look like "windows".
-            const boxGeo = new THREE.BoxGeometry(10, 10, 10);
-            materials = [];
-
-            for(let i=0; i<6; i++) {
-                // Create a placeholder canvas
-                const canvas = document.createElement('canvas');
-                canvas.width = 512; canvas.height = 512;
-                const ctx = canvas.getContext('2d');
-                
-                // Draw a guide
-                ctx.fillStyle = 'rgba(0,0,0,0.3)';
-                ctx.fillRect(0,0,512,512);
-                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-                ctx.lineWidth = 5;
-                ctx.strokeRect(0,0,512,512);
-
-                const tex = new THREE.CanvasTexture(canvas);
-                const mat = new THREE.MeshBasicMaterial({ 
-                    map: tex, 
-                    side: THREE.BackSide, // Visible from inside
-                    transparent: true,
-                    opacity: 0.8
-                });
-                materials.push(mat);
-            }
-
-            const box = new THREE.Mesh(boxGeo, materials);
-            // Flip X so the inside isn't mirrored text
-            box.scale.set(-1, 1, 1); 
-            captureGroup.add(box);
-
-            scene.add(captureGroup);
-            
-            // Reset Camera
-            camera.rotation.set(0,0,0);
-            controls.reset();
-        }
-
-        // --- UI & GUIDANCE ---
-        function updateStepUI() {
-            const step = STEPS[currentStepIndex];
-            stepLabel.innerText = `STEP ${currentStepIndex+1}: ${step.name}`;
-            stepDesc.innerText = "Drag screen to find the active face";
-
-            // Hide all arrows
-            document.querySelectorAll('.arrow').forEach(a => a.classList.remove('visible'));
-            
-            // Highlight Reticle
-            reticle.classList.remove('active');
-            btnCapture.classList.add('disabled');
-        }
-
-        function checkAlignment() {
-            if(!captureGroup) return;
-
-            // Raycast to check if we are looking at the CORRECT face
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(new THREE.Vector2(0,0), camera); // Center of screen
-            
-            // We need to raycast against the box mesh inside the group
-            const boxMesh = captureGroup.children[1]; 
-            const intersects = raycaster.intersectObject(boxMesh);
-
-            if(intersects.length > 0) {
-                const faceIndex = intersects[0].face.materialIndex;
-                const targetFaceId = STEPS[currentStepIndex].id;
-
-                if(faceIndex === targetFaceId) {
-                    // WE ARE ALIGNED!
-                    reticle.classList.add('active');
-                    btnCapture.classList.remove('disabled');
-                    stepDesc.innerText = "ALIGNED! TAP TO CAPTURE";
-                    document.querySelectorAll('.arrow').forEach(a => a.classList.remove('visible'));
-                } else {
-                    // Not aligned, show hints
-                    reticle.classList.remove('active');
-                    btnCapture.classList.add('disabled');
-                    stepDesc.innerText = `Turn to find the ${STEPS[currentStepIndex].name} side`;
-                    
-                    // Simple arrow logic based on step sequence
-                    const prevStep = currentStepIndex > 0 ? STEPS[currentStepIndex-1].next : 'right';
-                    // This is rough logic, strictly guiding 1->2->3 works best by just hiding wrong faces?
-                    // Let's just use the 'next' hint from the config
+        btn.addEventListener('click', async () => {
+            // iOS 13+ requires permission request
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                try {
+                    const permissionState = await DeviceMotionEvent.requestPermission();
+                    if (permissionState === 'granted') {
+                        enableSensor();
+                    } else {
+                        status.innerText = "Permission Denied";
+                    }
+                } catch (e) {
+                    console.error(e);
+                    // Fallback for non-https or errors
+                    enableSensor(); 
                 }
-            }
-        }
-
-        function handleCapture() {
-            if(btnCapture.classList.contains('disabled')) return;
-
-            const step = STEPS[currentStepIndex];
-            const matIndex = step.id;
-            const material = materials[matIndex];
-
-            // 1. CAPTURE HIGH RES
-            const size = 1024;
-            const cvs = document.createElement('canvas');
-            cvs.width = size; cvs.height = size;
-            const ctx = cvs.getContext('2d');
-
-            const vw = video.videoWidth;
-            const vh = video.videoHeight;
-            
-            // CROP LOGIC: The user sees a 16:9 box, but the texture is 1:1.
-            // We must capture the center 1:1 square of the video feed to fill the face.
-            const minDim = Math.min(vw, vh);
-            const sx = (vw - minDim) / 2;
-            const sy = (vh - minDim) / 2;
-
-            // MIRROR FIX: 
-            // Video is CSS transformed scaleX(-1).
-            // To get readable text on the texture, we must flip it here.
-            ctx.translate(size, 0);
-            ctx.scale(-1, 1);
-            
-            // Draw
-            ctx.filter = "contrast(1.2) saturate(1.1)"; // Fix dull colors
-            ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, size, size);
-
-            // Apply
-            const tex = new THREE.CanvasTexture(cvs);
-            tex.colorSpace = THREE.SRGBColorSpace;
-            
-            material.map = tex;
-            material.opacity = 1; // Make fully opaque
-            material.needsUpdate = true;
-            capturedTextures[matIndex] = tex; // Store for export
-
-            // Show Toast
-            showToast("Captured!");
-
-            // Next Step
-            currentStepIndex++;
-            if(currentStepIndex >= STEPS.length) {
-                // DONE
-                stepLabel.innerText = "COMPLETE";
-                stepDesc.innerText = "All sides captured.";
-                btnCapture.style.display = 'none';
-                btnFinish.style.display = 'block';
-                reticle.style.display = 'none';
             } else {
-                updateStepUI();
-                // Show direction hint
-                const nextDir = STEPS[currentStepIndex-1].next;
-                if(nextDir === 'right') document.querySelector('.arrow-right').classList.add('visible');
-                if(nextDir === 'left') document.querySelector('.arrow-left').classList.add('visible');
-                if(nextDir === 'up') document.querySelector('.arrow-up').classList.add('visible');
-                if(nextDir === 'down') document.querySelector('.arrow-down').classList.add('visible');
+                // Non-iOS 13+ devices
+                enableSensor();
+            }
+        });
+
+        function enableSensor() {
+            useSensor = !useSensor; // Toggle
+            
+            if (useSensor) {
+                btn.classList.add('active-state');
+                status.innerText = "Sensor Active: Tilt Phone to Steer";
+                window.addEventListener('devicemotion', handleMotion, true);
+            } else {
+                btn.classList.remove('active-state');
+                status.innerText = "Sensor Disabled";
+                window.removeEventListener('devicemotion', handleMotion, true);
             }
         }
 
-        // --- STITCHING & SAVING ---
-        function finalizeGlobe() {
-            showToast("Stitching... Please wait");
-
-            // 1. Convert Cube to Equirectangular Sphere
-            // We use a CubeCamera to "photograph" our created box from the inside
-            const cubeTarget = new THREE.WebGLCubeRenderTarget(1024);
-            const cubeCam = new THREE.CubeCamera(0.1, 100, cubeTarget);
-            scene.add(cubeCam);
+        function handleMotion(event) {
+            // User requested ACCELEROMETER ONLY (no Gyro)
+            // event.accelerationIncludingGravity gives x,y,z forces
+            // When holding phone up: Y is roughly -9.8 (gravity)
             
-            // Ensure visual wireframe is hidden for the photo
-            captureGroup.children[0].visible = false; 
-            captureGroup.children[1].scale.set(-1,1,1); // Ensure inside view
+            const acc = event.accelerationIncludingGravity;
+            if(!acc) return;
 
-            cubeCam.update(renderer, scene);
-
-            // 2. Unwrap CubeTexture to Flat Image using Shader
-            const equiMaterial = new THREE.ShaderMaterial({
-                uniforms: { map: { value: cubeTarget.texture } },
-                vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position, 1.0); }`,
-                fragmentShader: `
-                    uniform samplerCube map; varying vec2 vUv;
-                    const float PI = 3.14159265359;
-                    void main() {
-                        vec2 uv = vUv;
-                        float lon = uv.x * 2.0 * PI - PI;
-                        float lat = uv.y * PI - PI / 2.0;
-                        vec3 dir = vec3(-cos(lat) * sin(lon), sin(lat), -cos(lat) * cos(lon));
-                        gl_FragColor = textureCube(map, normalize(dir));
-                    }
-                `,
-                side: THREE.DoubleSide
-            });
-
-            const exportScene = new THREE.Scene();
-            exportScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), equiMaterial));
-            const ortho = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
-            
-            renderer.setSize(2048, 1024);
-            renderer.render(exportScene, ortho);
-
-            // 3. Save
-            const imgData = renderer.domElement.toDataURL('image/jpeg', 0.85);
-            
-            const newItem = {
-                id: Date.now(),
-                img: imgData
-            };
-            
-            try {
-                const list = JSON.parse(localStorage.getItem('globes') || '[]');
-                list.unshift(newItem);
-                if(list.length > 6) list.pop(); // Limit storage
-                localStorage.setItem('globes', JSON.stringify(list));
-                
-                // Switch to View Mode
-                loadViewer(imgData);
-                
-                // Restore Renderer
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                
-            } catch(e) {
-                alert("Storage Full! Delete some globes.");
-            }
+            // Low pass filter to smooth out jitter
+            const alpha = 0.1; 
+            accelX = accelX + alpha * (acc.x - accelX);
+            accelY = accelY + alpha * (acc.y - accelY);
+            accelZ = accelZ + alpha * (acc.z - accelZ);
         }
 
-        function loadViewer(imgData) {
-            // Hide UI
-            uiLayer.style.display = 'none';
-            galleryScreen.classList.add('hidden');
-            
-            // Clean Scene
-            scene.remove(captureGroup);
-            if(viewerSphere) scene.remove(viewerSphere);
-
-            // Create Globe
-            const tex = new THREE.TextureLoader().load(imgData);
-            tex.colorSpace = THREE.SRGBColorSpace;
-            const geo = new THREE.SphereGeometry(10, 60, 40);
-            const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide });
-            viewerSphere = new THREE.Mesh(geo, mat);
-            // Fix Mirroring for View: 
-            // We want to see inside. Scale X = -1.
-            viewerSphere.scale.set(-1, 1, 1);
-            
-            scene.add(viewerSphere);
-            
-            // Enable Home Button again
-            const homeBtn = document.createElement('button');
-            homeBtn.innerText = "Back to Gallery";
-            homeBtn.style.cssText = "position:fixed;bottom:30px;left:50%;transform:translateX(-50%);padding:15px 30px;background:#00d2d3;border:none;border-radius:30px;font-weight:bold;z-index:99;box-shadow:0 4px 10px rgba(0,0,0,0.5);";
-            homeBtn.onclick = () => {
-                homeBtn.remove();
-                goHome();
-                initGallery();
-            };
-            document.body.appendChild(homeBtn);
-        }
-
-        // --- GALLERY ---
-        function initGallery() {
-            const list = JSON.parse(localStorage.getItem('globes') || '[]');
-            const container = document.getElementById('gallery-list');
-            container.innerHTML = '';
-
-            if(list.length === 0) {
-                container.innerHTML = '<div style="color:white; grid-column:span 2; text-align:center; opacity:0.5;">No captures yet</div>';
-                return;
-            }
-
-            list.forEach((item, idx) => {
-                const card = document.createElement('div');
-                card.className = 'gallery-card';
-                card.innerHTML = `
-                    <img src="${item.img}" />
-                    <button class="btn-delete" data-idx="${idx}">×</button>
-                `;
-                card.onclick = (e) => {
-                    if(!e.target.classList.contains('btn-delete')) {
-                        // View
-                        loadViewer(item.img);
-                        galleryScreen.classList.add('hidden');
-                    }
-                };
-                container.appendChild(card);
-            });
-
-            // Delete Handlers
-            document.querySelectorAll('.btn-delete').forEach(btn => {
-                btn.onclick = (e) => {
-                    e.stopPropagation();
-                    const idx = parseInt(e.target.dataset.idx);
-                    list.splice(idx, 1);
-                    localStorage.setItem('globes', JSON.stringify(list));
-                    initGallery();
-                };
-            });
-        }
-
-        function showToast(msg) {
-            const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.style.opacity = 1;
-            setTimeout(() => t.style.opacity = 0, 2000);
-        }
-
-        // --- LOOP ---
+        // --- 5. RENDER LOOP ---
         function animate() {
             requestAnimationFrame(animate);
-            checkAlignment(); // Continuous check for reticle
-            controls.update();
+            update();
+        }
+
+        function update() {
+            if (useSensor) {
+                // ACCELEROMETER "JOYSTICK" LOGIC
+                // Since Accel can't detect Yaw (compass direction), we use Tilt as a steering wheel.
+                
+                // 1. Tilt Left/Right (X-axis gravity) -> Adds to Longitude (Yaw)
+                // Threshold of 1.0 to create a "dead zone" in the middle so it stops drifting
+                if (Math.abs(accelX) > 1.0) {
+                    // Multiply by small factor for speed
+                    lon += accelX * 0.5; 
+                }
+
+                // 2. Tilt Forward/Back (Y/Z axis relationship) -> Sets Latitude (Pitch)
+                // We calculate roughly how upright the phone is
+                // When accelY is -9.8 (upright), lat should be 0.
+                // When accelZ changes, we tilt up/down.
+                
+                // Simple mapping: Map Z axis (leaning back/forward) to Latitude
+                // This is an approximation to fulfill "Do as you can max"
+                lat = (accelZ - 2) * -5; 
+            }
+
+            // Clamp latitude to avoid flipping over
+            lat = Math.max(-85, Math.min(85, lat));
+
+            // Math to convert lat/lon to 3D vector for Camera
+            phi = THREE.MathUtils.degToRad(90 - lat);
+            theta = THREE.MathUtils.degToRad(lon);
+
+            const x = 500 * Math.sin(phi) * Math.cos(theta);
+            const y = 500 * Math.cos(phi);
+            const z = 500 * Math.sin(phi) * Math.sin(theta);
+
+            camera.lookAt(x, y, z);
             renderer.render(scene, camera);
         }
+
+        // Handle Window Resize
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        animate();
     </script>
 </body>
 </html>
