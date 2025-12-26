@@ -1,336 +1,149 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Precision 360 Accelerometer</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #111;
-            font-family: 'Courier New', Courier, monospace;
-        }
+  <meta charset="UTF-8" />
+  <title>No-Gyro Camera 360 Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #00ffcc;
-            font-size: 20px;
-            z-index: 50;
-            pointer-events: none;
-        }
+  <style>
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+    video {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      width: 140px;
+      opacity: 0.2;
+      z-index: 10;
+      transform: scaleX(-1);
+    }
+  </style>
 
-        #container {
-            width: 100vw;
-            height: 100vh;
-            z-index: 1;
-        }
+  <!-- Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 
-        /* --- 3D CUBE INTERFACE --- */
-        .ui-layer {
-            position: absolute;
-            bottom: 80px;
-            left: 0;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            pointer-events: none; /* Let touches pass through around cube */
-            z-index: 100;
-        }
-
-        .scene-container {
-            width: 80px;
-            height: 80px;
-            perspective: 600px;
-            pointer-events: auto; /* Re-enable clicks for button */
-            cursor: pointer;
-        }
-
-        .cube {
-            width: 100%;
-            height: 100%;
-            position: relative;
-            transform-style: preserve-3d;
-            transition: transform 0.1s linear; /* Smooth visual update */
-            animation: idleSpin 8s infinite linear;
-        }
-
-        /* Idle animation when sensor is off */
-        @keyframes idleSpin {
-            0% { transform: rotateX(-20deg) rotateY(0deg); }
-            100% { transform: rotateX(-20deg) rotateY(360deg); }
-        }
-
-        .cube-face {
-            position: absolute;
-            width: 80px;
-            height: 80px;
-            border: 2px solid #00ffcc;
-            background: rgba(0, 0, 0, 0.8);
-            box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            color: white;
-            font-weight: bold;
-            user-select: none;
-            backface-visibility: visible;
-        }
-
-        .cube.sensor-active {
-            animation: none; /* Stop spinning, follow phone */
-            border-color: #ff0055;
-        }
-        .cube.sensor-active .cube-face {
-            border-color: #ff0055;
-            box-shadow: 0 0 20px rgba(255, 0, 85, 0.5);
-            background: rgba(50, 0, 20, 0.9);
-        }
-
-        /* Cube Positions */
-        .face-front  { transform: rotateY(  0deg) translateZ(40px); }
-        .face-right  { transform: rotateY( 90deg) translateZ(40px); }
-        .face-back   { transform: rotateY(180deg) translateZ(40px); }
-        .face-left   { transform: rotateY(-90deg) translateZ(40px); }
-        .face-top    { transform: rotateX( 90deg) translateZ(40px); }
-        .face-bottom { transform: rotateX(-90deg) translateZ(40px); }
-
-        /* HUD Data */
-        #data-hud {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: lime;
-            font-size: 10px;
-            background: rgba(0,0,0,0.6);
-            padding: 5px;
-            pointer-events: none;
-            white-space: pre;
-            z-index: 100;
-        }
-    </style>
+  <!-- MediaPipe -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 </head>
+
 <body>
 
-    <div id="loading">Loading High-Res Image...</div>
-    <div id="data-hud">TAP CUBE TO START</div>
+<video id="video" autoplay muted playsinline></video>
 
-    <!-- 3D Viewport -->
-    <div id="container"></div>
+<script>
+/* =========================
+   THREE.JS 360 SCENE
+========================= */
 
-    <!-- Cube Interface -->
-    <div class="ui-layer">
-        <div class="scene-container" id="cubeBtn">
-            <div class="cube" id="cubeEl">
-                <div class="cube-face face-front">START</div>
-                <div class="cube-face face-back">BACK</div>
-                <div class="cube-face face-right">R</div>
-                <div class="cube-face face-left">L</div>
-                <div class="cube-face face-top">UP</div>
-                <div class="cube-face face-bottom">DWN</div>
-            </div>
-        </div>
-    </div>
+const scene = new THREE.Scene()
 
-    <!-- Three.js Import -->
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-            }
-        }
-    </script>
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+)
 
-    <script type="module">
-        import * as THREE from 'three';
+const renderer = new THREE.WebGLRenderer({ antialias: true })
+renderer.setSize(window.innerWidth, window.innerHeight)
+document.body.appendChild(renderer.domElement)
 
-        // --- CONFIGURATION ---
-        const IMAGE_URL = 'https://storage.noirlab.edu/media/archives/images/thumb300y/20220407_Pachon_P35mm_SOARG_L_Fulld1-CC.jpg';
-        // Using a CORS proxy to ensure the image loads from the strict noirLab server
-        const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(IMAGE_URL);
+// Sphere
+const geometry = new THREE.SphereGeometry(500, 60, 40)
+geometry.scale(-1, 1, 1)
 
-        // --- 1. THREE.JS SETUP ---
-        const container = document.getElementById('container');
-        const hud = document.getElementById('data-hud');
-        
-        const scene = new THREE.Scene();
+// Texture
+const texture = new THREE.TextureLoader().load(
+  "https://storage.noirlab.edu/media/archives/images/thumb300y/20220407_Pachon_P35mm_SOARG_L_Fulld1-CC.jpg"
+)
 
-        // "Move further backwards" -> Wider FOV (100)
-        const camera = new THREE.PerspectiveCamera(100, window.innerWidth / window.innerHeight, 0.1, 2000);
-        
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        container.appendChild(renderer.domElement);
+const material = new THREE.MeshBasicMaterial({ map: texture })
+const sphere = new THREE.Mesh(geometry, material)
+scene.add(sphere)
 
-        // --- 2. SPHERE & TEXTURE ---
-        const geometry = new THREE.SphereGeometry(1000, 60, 40);
-        geometry.scale(-1, 1, 1); // Invert to see inside
+camera.rotation.order = "YXZ"
 
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.setCrossOrigin('anonymous');
+/* =========================
+   CAMERA + FACE TRACKING
+========================= */
 
-        textureLoader.load(
-            PROXY_URL,
-            (texture) => {
-                document.getElementById('loading').style.display = 'none';
-                texture.colorSpace = THREE.SRGBColorSpace;
-                // Fix for polar distortion on flat images mapped to spheres
-                texture.minFilter = THREE.LinearFilter;
-                
-                const material = new THREE.MeshBasicMaterial({ map: texture });
-                const mesh = new THREE.Mesh(geometry, material);
-                scene.add(mesh);
-            },
-            undefined,
-            (err) => {
-                document.getElementById('loading').innerText = "Image Load Failed (CORS).";
-                console.error("Texture Error", err);
-            }
-        );
+const video = document.getElementById("video")
 
-        // --- 3. VARIABLES ---
-        let isSensorActive = false;
-        
-        // Camera Angles
-        let camLat = 0; // Up/Down
-        let camLon = 0; // Left/Right rotation
-        
-        // Sensor Data (Filtered)
-        let ax = 0, ay = 0, az = 0;
-        
-        // Cube Rotation Targets
-        let cubeRotX = 0;
-        let cubeRotY = 0;
+let yaw = 0
+let pitch = 0
 
-        // --- 4. ACCELEROMETER LOGIC ---
-        const cubeBtn = document.getElementById('cubeBtn');
-        const cubeEl = document.getElementById('cubeEl');
+let lastX = null
+let lastY = null
 
-        cubeBtn.addEventListener('click', requestSensors);
+const faceMesh = new FaceMesh({
+  locateFile: file =>
+    `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+})
 
-        function requestSensors() {
-            // iOS 13+ Permission Request
-            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-                DeviceMotionEvent.requestPermission()
-                    .then(response => {
-                        if (response === 'granted') toggleSensors();
-                        else hud.innerText = "PERMISSION DENIED";
-                    })
-                    .catch(console.error);
-            } else {
-                toggleSensors();
-            }
-        }
+faceMesh.setOptions({
+  maxNumFaces: 1,
+  refineLandmarks: false,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+})
 
-        function toggleSensors() {
-            isSensorActive = !isSensorActive;
-            if (isSensorActive) {
-                cubeEl.classList.add('sensor-active');
-                hud.innerText = "SENSOR ON\nTilt Phone to Look";
-                window.addEventListener('devicemotion', handleMotion, true);
-            } else {
-                cubeEl.classList.remove('sensor-active');
-                hud.innerText = "SENSOR OFF";
-                window.removeEventListener('devicemotion', handleMotion, true);
-                // Reset Cube visual
-                cubeEl.style.transform = ''; 
-            }
-        }
+faceMesh.onResults(results => {
+  if (!results.multiFaceLandmarks.length) return
 
-        function handleMotion(event) {
-            // Get raw acceleration including gravity
-            const acc = event.accelerationIncludingGravity;
-            if (!acc) return;
+  const lm = results.multiFaceLandmarks[0][1] // nose bridge
+  const x = lm.x
+  const y = lm.y
 
-            // --- SMOOTHING ALGORITHM (Low Pass Filter) ---
-            // This creates the "Ultimate Precision" feel by removing jitter
-            // 0.1 means taking 10% of new data and 90% of old data
-            const alpha = 0.08; 
-            
-            // Normalize somewhat to handle different devices
-            // X is usually Left/Right tilt
-            // Y is usually Up/Down tilt
-            // Z is Forward/Back depth
-            
-            // Android/iOS differences often flip signs, assuming standard Portrait:
-            // x: Left/Right, y: Up/Down, z: Face
-            
-            ax = ax + alpha * (acc.x - ax);
-            ay = ay + alpha * (acc.y - ay);
-            az = az + alpha * (acc.z - az);
+  if (lastX !== null) {
+    const dx = x - lastX
+    const dy = y - lastY
 
-            // --- CUBE VISUALIZATION ---
-            // Rotate the cube HTML element based on raw gravity vector
-            // We calculate Rotation from Gravity Vector
-            
-            // Pitch (Rotation around X axis) depends on Y/Z
-            const rotX = Math.atan2(ay, az) * (180 / Math.PI);
-            
-            // Roll (Rotation around Y axis for visual representation) depends on X
-            const rotY = ax * -10; // Simple tilt map
+    yaw   -= dx * 2.5
+    pitch -= dy * 2.5
 
-            // Apply to CSS
-            if (isSensorActive) {
-                cubeEl.style.transform = `rotateX(${rotX - 90}deg) rotateY(${rotY}deg)`;
-            }
+    pitch = Math.max(-1.3, Math.min(1.3, pitch))
+  }
 
-            // --- CAMERA LOGIC (The hard part with no Gyro) ---
+  lastX = x
+  lastY = y
+})
 
-            // 1. PITCH (Looking Up and Down)
-            // Accelerometer is perfect for this. We map the Y-gravity directly to Latitude.
-            // When holding phone vertical (Y = -9.8), Lat should be 0.
-            // Formula: Map Y-acceleration to degrees.
-            // Limiting to -85 to 85 degrees to prevent flipping.
-            const targetLat = (ay + 6) * 10; // +6 offsets the holding position
-            camLat = Math.max(-85, Math.min(85, targetLat));
+const cam = new Camera(video, {
+  onFrame: async () => {
+    await faceMesh.send({ image: video })
+  },
+  width: 640,
+  height: 480
+})
 
-            // 2. YAW (Looking Left and Right)
-            // Accelerometer CANNOT detect rotation on the spot (Yaw).
-            // Solution: "Steering Wheel" Mechanic.
-            // If you tilt the phone Left (ax > 0), we spin the camera Left.
-            // The more you tilt, the faster it spins.
-            
-            const turnThreshold = 1.0; // Deadzone
-            const turnSpeed = 1.5;
+cam.start()
 
-            if (Math.abs(ax) > turnThreshold) {
-                camLon += ax * turnSpeed;
-            }
-        }
+/* =========================
+   ANIMATION LOOP
+========================= */
 
-        // --- 5. ANIMATION LOOP ---
-        function animate() {
-            requestAnimationFrame(animate);
+function animate() {
+  requestAnimationFrame(animate)
 
-            // Convert Lat/Lon to 3D Vector
-            // Phi = Up/Down, Theta = Left/Right
-            const phi = THREE.MathUtils.degToRad(90 - camLat);
-            const theta = THREE.MathUtils.degToRad(camLon);
+  // smooth motion
+  camera.rotation.y += (yaw - camera.rotation.y) * 0.08
+  camera.rotation.x += (pitch - camera.rotation.x) * 0.08
 
-            // Spherical to Cartesian conversion
-            const x = 500 * Math.sin(phi) * Math.cos(theta);
-            const y = 500 * Math.cos(phi);
-            const z = 500 * Math.sin(phi) * Math.sin(theta);
+  renderer.render(scene, camera)
+}
 
-            camera.lookAt(x, y, z);
+animate()
 
-            renderer.render(scene, camera);
-        }
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize(window.innerWidth, window.innerHeight)
+})
+</script>
 
-        // --- 6. HANDLE WINDOW RESIZE ---
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // Start Loop
-        animate();
-    </script>
 </body>
 </html>
