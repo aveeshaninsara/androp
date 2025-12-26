@@ -3,31 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>360 View + Accelerometer Control</title>
+    <title>Precision 360 Accelerometer</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #000;
-            font-family: sans-serif;
+            background-color: #111;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ffcc;
+            font-size: 20px;
+            z-index: 50;
+            pointer-events: none;
         }
 
         #container {
             width: 100vw;
             height: 100vh;
+            z-index: 1;
         }
 
-        /* --- THE CUBE BUTTON CSS --- */
-        .scene-container {
+        /* --- 3D CUBE INTERFACE --- */
+        .ui-layer {
             position: absolute;
-            bottom: 50px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 60px;
-            height: 60px;
-            perspective: 400px;
-            cursor: pointer;
+            bottom: 80px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            pointer-events: none; /* Let touches pass through around cube */
             z-index: 100;
+        }
+
+        .scene-container {
+            width: 80px;
+            height: 80px;
+            perspective: 600px;
+            pointer-events: auto; /* Re-enable clicks for button */
+            cursor: pointer;
         }
 
         .cube {
@@ -35,81 +54,89 @@
             height: 100%;
             position: relative;
             transform-style: preserve-3d;
-            animation: spin 5s infinite linear;
-            transition: transform 0.5s;
+            transition: transform 0.1s linear; /* Smooth visual update */
+            animation: idleSpin 8s infinite linear;
+        }
+
+        /* Idle animation when sensor is off */
+        @keyframes idleSpin {
+            0% { transform: rotateX(-20deg) rotateY(0deg); }
+            100% { transform: rotateX(-20deg) rotateY(360deg); }
         }
 
         .cube-face {
             position: absolute;
-            width: 60px;
-            height: 60px;
+            width: 80px;
+            height: 80px;
             border: 2px solid #00ffcc;
-            background: rgba(0, 255, 204, 0.2);
-            box-shadow: 0 0 10px #00ffcc;
+            background: rgba(0, 0, 0, 0.8);
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
+            font-size: 12px;
             color: white;
             font-weight: bold;
-            text-transform: uppercase;
             user-select: none;
+            backface-visibility: visible;
         }
 
-        .face-front  { transform: rotateY(  0deg) translateZ(30px); }
-        .face-right  { transform: rotateY( 90deg) translateZ(30px); }
-        .face-back   { transform: rotateY(180deg) translateZ(30px); }
-        .face-left   { transform: rotateY(-90deg) translateZ(30px); }
-        .face-top    { transform: rotateX( 90deg) translateZ(30px); }
-        .face-bottom { transform: rotateX(-90deg) translateZ(30px); }
-
-        @keyframes spin {
-            from { transform: rotateX(-20deg) rotateY(0deg); }
-            to { transform: rotateX(-20deg) rotateY(360deg); }
-        }
-
-        .active-state .cube {
-            animation: none;
-            transform: rotateX(0) rotateY(0);
+        .cube.sensor-active {
+            animation: none; /* Stop spinning, follow phone */
             border-color: #ff0055;
         }
-        
-        .active-state .cube-face {
+        .cube.sensor-active .cube-face {
             border-color: #ff0055;
-            background: rgba(255, 0, 85, 0.2);
-            box-shadow: 0 0 15px #ff0055;
+            box-shadow: 0 0 20px rgba(255, 0, 85, 0.5);
+            background: rgba(50, 0, 20, 0.9);
         }
 
-        #status {
+        /* Cube Positions */
+        .face-front  { transform: rotateY(  0deg) translateZ(40px); }
+        .face-right  { transform: rotateY( 90deg) translateZ(40px); }
+        .face-back   { transform: rotateY(180deg) translateZ(40px); }
+        .face-left   { transform: rotateY(-90deg) translateZ(40px); }
+        .face-top    { transform: rotateX( 90deg) translateZ(40px); }
+        .face-bottom { transform: rotateX(-90deg) translateZ(40px); }
+
+        /* HUD Data */
+        #data-hud {
             position: absolute;
             top: 10px;
             left: 10px;
-            color: #00ffcc;
-            background: rgba(0,0,0,0.5);
+            color: lime;
+            font-size: 10px;
+            background: rgba(0,0,0,0.6);
             padding: 5px;
             pointer-events: none;
-            font-size: 12px;
+            white-space: pre;
+            z-index: 100;
         }
     </style>
 </head>
 <body>
 
-    <div id="status">Touch Cube to Enable Sensors</div>
+    <div id="loading">Loading High-Res Image...</div>
+    <div id="data-hud">TAP CUBE TO START</div>
+
+    <!-- 3D Viewport -->
     <div id="container"></div>
 
-    <!-- The Cube Button -->
-    <div class="scene-container" id="sensorBtn">
-        <div class="cube">
-            <div class="cube-face face-front">Touch</div>
-            <div class="cube-face face-back">Me</div>
-            <div class="cube-face face-right">X</div>
-            <div class="cube-face face-left">Y</div>
-            <div class="cube-face face-top">Z</div>
-            <div class="cube-face face-bottom">G</div>
+    <!-- Cube Interface -->
+    <div class="ui-layer">
+        <div class="scene-container" id="cubeBtn">
+            <div class="cube" id="cubeEl">
+                <div class="cube-face face-front">START</div>
+                <div class="cube-face face-back">BACK</div>
+                <div class="cube-face face-right">R</div>
+                <div class="cube-face face-left">L</div>
+                <div class="cube-face face-top">UP</div>
+                <div class="cube-face face-bottom">DWN</div>
+            </div>
         </div>
     </div>
 
-    <!-- Import Three.js via Module -->
+    <!-- Three.js Import -->
     <script type="importmap">
         {
             "imports": {
@@ -121,184 +148,188 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 1. SETUP THREE.JS SCENE ---
+        // --- CONFIGURATION ---
+        const IMAGE_URL = 'https://storage.noirlab.edu/media/archives/images/thumb300y/20220407_Pachon_P35mm_SOARG_L_Fulld1-CC.jpg';
+        // Using a CORS proxy to ensure the image loads from the strict noirLab server
+        const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(IMAGE_URL);
+
+        // --- 1. THREE.JS SETUP ---
         const container = document.getElementById('container');
+        const hud = document.getElementById('data-hud');
+        
         const scene = new THREE.Scene();
 
-        // Camera Setup
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.target = new THREE.Vector3(0, 0, 0);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        // "Move further backwards" -> Wider FOV (100)
+        const camera = new THREE.PerspectiveCamera(100, window.innerWidth / window.innerHeight, 0.1, 2000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         container.appendChild(renderer.domElement);
 
-        // --- 2. CREATE THE 360 SPHERE ---
-        const geometry = new THREE.SphereGeometry(500, 60, 40);
-        // Invert geometry so we view it from the inside
-        geometry.scale(-1, 1, 1);
+        // --- 2. SPHERE & TEXTURE ---
+        const geometry = new THREE.SphereGeometry(1000, 60, 40);
+        geometry.scale(-1, 1, 1); // Invert to see inside
 
-        // Load Texture
         const textureLoader = new THREE.TextureLoader();
-        // Use CrossOrigin anonymous to handle external images
         textureLoader.setCrossOrigin('anonymous');
-        
-        const imageUrl = 'https://storage.noirlab.edu/media/archives/images/thumb300y/20220407_Pachon_P35mm_SOARG_L_Fulld1-CC.jpg';
-        
-        const texture = textureLoader.load(imageUrl);
-        texture.colorSpace = THREE.SRGBColorSpace;
 
-        const material = new THREE.MeshBasicMaterial({ map: texture });
-        const mesh = new THREE.Mesh(geometry, material);
-        scene.add(mesh);
-
-        // Variables for rotation
-        let lon = 0, lat = 0;
-        let phi = 0, theta = 0;
-        let isUserInteracting = false;
-        let onPointerDownPointerX = 0, onPointerDownPointerY = 0;
-        let onPointerDownLon = 0, onPointerDownLat = 0;
-
-        // Accelerometer Variables
-        let useSensor = false;
-        let accelX = 0, accelY = 0, accelZ = 0;
-
-        // --- 3. INPUT HANDLERS (MOUSE/TOUCH) ---
-        // This allows dragging the screen manually if sensors aren't used
-        document.addEventListener('pointerdown', onPointerDown);
-        document.addEventListener('pointermove', onPointerMove);
-        document.addEventListener('pointerup', onPointerUp);
-        document.addEventListener('wheel', onDocumentMouseWheel);
-
-        function onPointerDown(event) {
-            if (event.isPrimary === false) return;
-            isUserInteracting = true;
-            onPointerDownPointerX = event.clientX;
-            onPointerDownPointerY = event.clientY;
-            onPointerDownLon = lon;
-            onPointerDownLat = lat;
-        }
-
-        function onPointerMove(event) {
-            if (event.isPrimary === false || !isUserInteracting) return;
-            lon = (onPointerDownPointerX - event.clientX) * 0.1 + onPointerDownLon;
-            lat = (event.clientY - onPointerDownPointerY) * 0.1 + onPointerDownLat;
-        }
-
-        function onPointerUp() { isUserInteracting = false; }
-
-        function onDocumentMouseWheel(event) {
-            const fov = camera.fov + event.deltaY * 0.05;
-            camera.fov = THREE.MathUtils.clamp(fov, 10, 75);
-            camera.updateProjectionMatrix();
-        }
-
-        // --- 4. ACCELEROMETER LOGIC (THE REQUEST) ---
-        const btn = document.getElementById('sensorBtn');
-        const status = document.getElementById('status');
-
-        btn.addEventListener('click', async () => {
-            // iOS 13+ requires permission request
-            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-                try {
-                    const permissionState = await DeviceMotionEvent.requestPermission();
-                    if (permissionState === 'granted') {
-                        enableSensor();
-                    } else {
-                        status.innerText = "Permission Denied";
-                    }
-                } catch (e) {
-                    console.error(e);
-                    // Fallback for non-https or errors
-                    enableSensor(); 
-                }
-            } else {
-                // Non-iOS 13+ devices
-                enableSensor();
+        textureLoader.load(
+            PROXY_URL,
+            (texture) => {
+                document.getElementById('loading').style.display = 'none';
+                texture.colorSpace = THREE.SRGBColorSpace;
+                // Fix for polar distortion on flat images mapped to spheres
+                texture.minFilter = THREE.LinearFilter;
+                
+                const material = new THREE.MeshBasicMaterial({ map: texture });
+                const mesh = new THREE.Mesh(geometry, material);
+                scene.add(mesh);
+            },
+            undefined,
+            (err) => {
+                document.getElementById('loading').innerText = "Image Load Failed (CORS).";
+                console.error("Texture Error", err);
             }
-        });
+        );
 
-        function enableSensor() {
-            useSensor = !useSensor; // Toggle
-            
-            if (useSensor) {
-                btn.classList.add('active-state');
-                status.innerText = "Sensor Active: Tilt Phone to Steer";
+        // --- 3. VARIABLES ---
+        let isSensorActive = false;
+        
+        // Camera Angles
+        let camLat = 0; // Up/Down
+        let camLon = 0; // Left/Right rotation
+        
+        // Sensor Data (Filtered)
+        let ax = 0, ay = 0, az = 0;
+        
+        // Cube Rotation Targets
+        let cubeRotX = 0;
+        let cubeRotY = 0;
+
+        // --- 4. ACCELEROMETER LOGIC ---
+        const cubeBtn = document.getElementById('cubeBtn');
+        const cubeEl = document.getElementById('cubeEl');
+
+        cubeBtn.addEventListener('click', requestSensors);
+
+        function requestSensors() {
+            // iOS 13+ Permission Request
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                DeviceMotionEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') toggleSensors();
+                        else hud.innerText = "PERMISSION DENIED";
+                    })
+                    .catch(console.error);
+            } else {
+                toggleSensors();
+            }
+        }
+
+        function toggleSensors() {
+            isSensorActive = !isSensorActive;
+            if (isSensorActive) {
+                cubeEl.classList.add('sensor-active');
+                hud.innerText = "SENSOR ON\nTilt Phone to Look";
                 window.addEventListener('devicemotion', handleMotion, true);
             } else {
-                btn.classList.remove('active-state');
-                status.innerText = "Sensor Disabled";
+                cubeEl.classList.remove('sensor-active');
+                hud.innerText = "SENSOR OFF";
                 window.removeEventListener('devicemotion', handleMotion, true);
+                // Reset Cube visual
+                cubeEl.style.transform = ''; 
             }
         }
 
         function handleMotion(event) {
-            // User requested ACCELEROMETER ONLY (no Gyro)
-            // event.accelerationIncludingGravity gives x,y,z forces
-            // When holding phone up: Y is roughly -9.8 (gravity)
-            
+            // Get raw acceleration including gravity
             const acc = event.accelerationIncludingGravity;
-            if(!acc) return;
+            if (!acc) return;
 
-            // Low pass filter to smooth out jitter
-            const alpha = 0.1; 
-            accelX = accelX + alpha * (acc.x - accelX);
-            accelY = accelY + alpha * (acc.y - accelY);
-            accelZ = accelZ + alpha * (acc.z - accelZ);
-        }
+            // --- SMOOTHING ALGORITHM (Low Pass Filter) ---
+            // This creates the "Ultimate Precision" feel by removing jitter
+            // 0.1 means taking 10% of new data and 90% of old data
+            const alpha = 0.08; 
+            
+            // Normalize somewhat to handle different devices
+            // X is usually Left/Right tilt
+            // Y is usually Up/Down tilt
+            // Z is Forward/Back depth
+            
+            // Android/iOS differences often flip signs, assuming standard Portrait:
+            // x: Left/Right, y: Up/Down, z: Face
+            
+            ax = ax + alpha * (acc.x - ax);
+            ay = ay + alpha * (acc.y - ay);
+            az = az + alpha * (acc.z - az);
 
-        // --- 5. RENDER LOOP ---
-        function animate() {
-            requestAnimationFrame(animate);
-            update();
-        }
+            // --- CUBE VISUALIZATION ---
+            // Rotate the cube HTML element based on raw gravity vector
+            // We calculate Rotation from Gravity Vector
+            
+            // Pitch (Rotation around X axis) depends on Y/Z
+            const rotX = Math.atan2(ay, az) * (180 / Math.PI);
+            
+            // Roll (Rotation around Y axis for visual representation) depends on X
+            const rotY = ax * -10; // Simple tilt map
 
-        function update() {
-            if (useSensor) {
-                // ACCELEROMETER "JOYSTICK" LOGIC
-                // Since Accel can't detect Yaw (compass direction), we use Tilt as a steering wheel.
-                
-                // 1. Tilt Left/Right (X-axis gravity) -> Adds to Longitude (Yaw)
-                // Threshold of 1.0 to create a "dead zone" in the middle so it stops drifting
-                if (Math.abs(accelX) > 1.0) {
-                    // Multiply by small factor for speed
-                    lon += accelX * 0.5; 
-                }
-
-                // 2. Tilt Forward/Back (Y/Z axis relationship) -> Sets Latitude (Pitch)
-                // We calculate roughly how upright the phone is
-                // When accelY is -9.8 (upright), lat should be 0.
-                // When accelZ changes, we tilt up/down.
-                
-                // Simple mapping: Map Z axis (leaning back/forward) to Latitude
-                // This is an approximation to fulfill "Do as you can max"
-                lat = (accelZ - 2) * -5; 
+            // Apply to CSS
+            if (isSensorActive) {
+                cubeEl.style.transform = `rotateX(${rotX - 90}deg) rotateY(${rotY}deg)`;
             }
 
-            // Clamp latitude to avoid flipping over
-            lat = Math.max(-85, Math.min(85, lat));
+            // --- CAMERA LOGIC (The hard part with no Gyro) ---
 
-            // Math to convert lat/lon to 3D vector for Camera
-            phi = THREE.MathUtils.degToRad(90 - lat);
-            theta = THREE.MathUtils.degToRad(lon);
+            // 1. PITCH (Looking Up and Down)
+            // Accelerometer is perfect for this. We map the Y-gravity directly to Latitude.
+            // When holding phone vertical (Y = -9.8), Lat should be 0.
+            // Formula: Map Y-acceleration to degrees.
+            // Limiting to -85 to 85 degrees to prevent flipping.
+            const targetLat = (ay + 6) * 10; // +6 offsets the holding position
+            camLat = Math.max(-85, Math.min(85, targetLat));
 
+            // 2. YAW (Looking Left and Right)
+            // Accelerometer CANNOT detect rotation on the spot (Yaw).
+            // Solution: "Steering Wheel" Mechanic.
+            // If you tilt the phone Left (ax > 0), we spin the camera Left.
+            // The more you tilt, the faster it spins.
+            
+            const turnThreshold = 1.0; // Deadzone
+            const turnSpeed = 1.5;
+
+            if (Math.abs(ax) > turnThreshold) {
+                camLon += ax * turnSpeed;
+            }
+        }
+
+        // --- 5. ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Convert Lat/Lon to 3D Vector
+            // Phi = Up/Down, Theta = Left/Right
+            const phi = THREE.MathUtils.degToRad(90 - camLat);
+            const theta = THREE.MathUtils.degToRad(camLon);
+
+            // Spherical to Cartesian conversion
             const x = 500 * Math.sin(phi) * Math.cos(theta);
             const y = 500 * Math.cos(phi);
             const z = 500 * Math.sin(phi) * Math.sin(theta);
 
             camera.lookAt(x, y, z);
+
             renderer.render(scene, camera);
         }
 
-        // Handle Window Resize
-        window.addEventListener('resize', onWindowResize, false);
-        function onWindowResize() {
+        // --- 6. HANDLE WINDOW RESIZE ---
+        window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+        });
 
+        // Start Loop
         animate();
     </script>
 </body>
