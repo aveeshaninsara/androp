@@ -3,17 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Precision 360 Viewer</title>
+    <title>Grid 360 Controller</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
         /* FULLSCREEN CANVAS */
-        #container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
+        }
 
         /* UI OVERLAY */
-        #ui {
+        #ui-layer {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
             z-index: 10;
             display: flex;
@@ -21,44 +37,35 @@
             justify-content: space-between;
         }
 
-        /* STATUS TEXT */
-        #status-bar {
-            background: rgba(0,0,0,0.7);
-            color: #00ffcc;
-            padding: 10px;
+        /* STATUS BAR */
+        #status {
+            background: rgba(0, 255, 0, 0.1);
+            color: #0f0;
+            padding: 15px;
             text-align: center;
             font-size: 14px;
+            border-bottom: 1px solid #0f0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 5px #0f0;
             pointer-events: auto;
         }
 
-        /* LOADING SPINNER */
-        #loader {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            background: rgba(0,0,0,0.8);
-            padding: 20px;
-            border-radius: 10px;
-            border: 1px solid white;
-            text-align: center;
-        }
-
-        /* BOTTOM CONTROL AREA */
+        /* BOTTOM CONTROLS */
         .controls {
+            padding-bottom: 60px;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding-bottom: 50px;
-            pointer-events: none; /* Let touches pass to canvas mostly */
+            pointer-events: none;
         }
 
-        /* 3D CUBE BUTTON */
-        .scene-btn {
+        /* CUBE BUTTON */
+        .scene-container {
             width: 80px;
             height: 80px;
-            perspective: 600px;
-            pointer-events: auto; /* Enable touch on the cube */
+            perspective: 800px;
+            pointer-events: auto; /* Enable clicks */
             cursor: pointer;
             -webkit-tap-highlight-color: transparent;
         }
@@ -68,59 +75,68 @@
             height: 100%;
             position: relative;
             transform-style: preserve-3d;
-            transition: transform 0.1s; /* Smooth update */
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             animation: idleSpin 10s infinite linear;
         }
 
-        @keyframes idleSpin { 100% { transform: rotateX(-20deg) rotateY(360deg); } }
+        @keyframes idleSpin {
+            0% { transform: rotateX(-20deg) rotateY(0deg); }
+            100% { transform: rotateX(-20deg) rotateY(360deg); }
+        }
 
         .cube-face {
             position: absolute;
-            width: 80px; height: 80px;
-            border: 2px solid #fff;
-            background: rgba(0, 100, 255, 0.5);
-            display: flex; align-items: center; justify-content: center;
-            font-weight: bold; color: #fff; font-size: 12px;
-            backface-visibility: hidden; /* Hide inside faces */
+            width: 80px;
+            height: 80px;
+            border: 2px solid #0f0;
+            background: rgba(0, 20, 0, 0.85);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.4) inset;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #0f0;
+            font-weight: bold;
+            user-select: none;
+            backface-visibility: hidden;
         }
 
-        /* Cube Face Positions */
-        .f-front  { transform: rotateY(  0deg) translateZ(40px); }
-        .f-back   { transform: rotateY(180deg) translateZ(40px); }
-        .f-right  { transform: rotateY( 90deg) translateZ(40px); }
-        .f-left   { transform: rotateY(-90deg) translateZ(40px); }
-        .f-top    { transform: rotateX( 90deg) translateZ(40px); }
-        .f-bottom { transform: rotateX(-90deg) translateZ(40px); }
+        /* POSITIONS */
+        .face-front  { transform: rotateY(  0deg) translateZ(40px); }
+        .face-right  { transform: rotateY( 90deg) translateZ(40px); }
+        .face-back   { transform: rotateY(180deg) translateZ(40px); }
+        .face-left   { transform: rotateY(-90deg) translateZ(40px); }
+        .face-top    { transform: rotateX( 90deg) translateZ(40px); }
+        .face-bottom { transform: rotateX(-90deg) translateZ(40px); }
 
-        /* ACTIVE STATE (When holding button) */
-        .active .cube { animation: none; }
-        .active .cube-face { background: rgba(255, 0, 80, 0.8); border-color: #ff0050; box-shadow: 0 0 20px #ff0050; }
-
+        /* ACTIVE STATE (ON) */
+        .active-state .cube {
+            animation: none;
+        }
+        .active-state .cube-face {
+            border-color: #ff0055;
+            color: #ff0055;
+            background: rgba(40, 0, 10, 0.9);
+            box-shadow: 0 0 20px #ff0055;
+        }
     </style>
 </head>
 <body>
 
-    <!-- 3D Canvas -->
     <div id="container"></div>
 
-    <!-- Interface -->
-    <div id="ui">
-        <div id="status-bar">Drag screen to look • <b>HOLD CUBE</b> to tilt-control</div>
+    <div id="ui-layer">
+        <div id="status">TAP CUBE TO ACTIVATE SENSOR</div>
         
-        <div id="loader">
-            Loading High-Res Image...<br>
-            <span style="font-size:10px; color:#aaa;">If it freezes, a grid will load in 5s.</span>
-        </div>
-
         <div class="controls">
-            <div class="scene-btn" id="ctrlBtn">
-                <div class="cube" id="cube">
-                    <div class="cube-face f-front">HOLD</div>
-                    <div class="cube-face f-back">ME</div>
-                    <div class="cube-face f-right">►</div>
-                    <div class="cube-face f-left">◄</div>
-                    <div class="cube-face f-top">▲</div>
-                    <div class="cube-face f-bottom">▼</div>
+            <div class="scene-container" id="toggleBtn">
+                <div class="cube" id="cubeVis">
+                    <div class="cube-face face-front">OFF</div>
+                    <div class="cube-face face-back">ON</div>
+                    <div class="cube-face face-right">►</div>
+                    <div class="cube-face face-left">◄</div>
+                    <div class="cube-face face-top">▲</div>
+                    <div class="cube-face face-bottom">▼</div>
                 </div>
             </div>
         </div>
@@ -128,210 +144,194 @@
 
     <!-- THREE.JS -->
     <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 1. SETUP ---
+        // --- 1. SETUP SCENE ---
         const container = document.getElementById('container');
-        const loaderDiv = document.getElementById('loader');
-        const statusEl = document.getElementById('status-bar');
+        const statusEl = document.getElementById('status');
         
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(80, window.innerWidth/window.innerHeight, 0.1, 2000);
+        // Add some fog for depth
+        scene.fog = new THREE.FogExp2(0x000000, 0.0015);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
         
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         container.appendChild(renderer.domElement);
 
-        // --- 2. IMAGE LOADING ROBUSTNESS ---
-        // We use a generated grid if the image fails (CORS/Network)
-        function createFallbackTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512; canvas.height = 256;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#111'; ctx.fillRect(0,0,512,256);
-            ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 2;
-            
-            // Draw Grid
-            for(let i=0; i<512; i+=32) { ctx.moveTo(i,0); ctx.lineTo(i,256); }
-            for(let i=0; i<256; i+=32) { ctx.moveTo(0,i); ctx.lineTo(512,i); }
-            ctx.stroke();
-            
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.colorSpace = THREE.SRGBColorSpace;
-            return tex;
-        }
+        // --- 2. CREATE THE GRID (REPLACING THE IMAGE) ---
+        // We use a large sphere with wireframe to create a 360 grid effect
+        const geometry = new THREE.SphereGeometry(600, 40, 24);
+        geometry.scale(-1, 1, 1); // Invert so we are inside
 
-        const sphereGeo = new THREE.SphereGeometry(500, 60, 40);
-        sphereGeo.scale(-1, 1, 1); // Invert geometry
-        
-        const manager = new THREE.LoadingManager();
-        const textureLoader = new THREE.TextureLoader(manager);
-        
-        // DIRECT IMAGE LINK (No Proxy - Proxies break often)
-        const imgUrl = 'https://storage.noirlab.edu/media/archives/images/thumb300y/20220407_Pachon_P35mm_SOARG_L_Fulld1-CC.jpg';
-        
-        textureLoader.setCrossOrigin('anonymous');
-        
-        // TIMEOUT SAFETY: If image takes > 5 seconds, force load grid
-        const loadTimeout = setTimeout(() => {
-            if(loaderDiv.style.display !== 'none') {
-                console.log("Image timed out. Using grid.");
-                finishLoad(createFallbackTexture(), "Network Timeout - Using Grid");
-            }
-        }, 5000);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0x00ff00,    // Matrix Green
+            wireframe: true,
+            transparent: true,
+            opacity: 0.3
+        });
 
-        textureLoader.load(
-            imgUrl,
-            (tex) => { 
-                clearTimeout(loadTimeout);
-                finishLoad(tex, "Ready");
-            },
-            undefined,
-            (err) => {
-                clearTimeout(loadTimeout);
-                finishLoad(createFallbackTexture(), "CORS/Error - Using Grid");
-            }
-        );
+        const gridMesh = new THREE.Mesh(geometry, material);
+        scene.add(gridMesh);
 
-        function finishLoad(texture, msg) {
-            loaderDiv.style.display = 'none';
-            statusEl.innerHTML = msg + " • <b>HOLD CUBE</b> to Control";
-            texture.colorSpace = THREE.SRGBColorSpace;
-            texture.minFilter = THREE.LinearFilter;
-            const mat = new THREE.MeshBasicMaterial({ map: texture });
-            scene.add(new THREE.Mesh(sphereGeo, mat));
-        }
+        // Add a secondary grid for visual complexity
+        const subGeo = new THREE.SphereGeometry(550, 80, 48);
+        subGeo.scale(-1, 1, 1);
+        const subMat = new THREE.MeshBasicMaterial({
+            color: 0x004400,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.1
+        });
+        scene.add(new THREE.Mesh(subGeo, subMat));
 
-        // --- 3. MOVEMENT LOGIC ---
-        let lon = 0, lat = 0;
+
+        // --- 3. MOVEMENT VARIABLES ---
+        let lon = 0, lat = 0; // Camera angles
         let phi = 0, theta = 0;
         
-        // Touch Drag Logic
+        // Manual Drag
         let isUserInteracting = false;
         let onPointerDownPointerX = 0, onPointerDownPointerY = 0;
         let onPointerDownLon = 0, onPointerDownLat = 0;
 
+        // Sensor State
+        let isSensorActive = false;
+        
+        // Calibration (The "Zero" Point)
+        let calibX = 0, calibY = 0;
+        let currentX = 0, currentY = 0;
+
+        // --- 4. TOUCH INTERACTION (DRAG) ---
         document.addEventListener('pointerdown', (e) => {
-            if(e.target.closest('#ctrlBtn')) return; // Ignore if touching cube
+            if (e.target.closest('#toggleBtn')) return; // Ignore cube clicks
             isUserInteracting = true;
             onPointerDownPointerX = e.clientX;
             onPointerDownPointerY = e.clientY;
             onPointerDownLon = lon;
             onPointerDownLat = lat;
         });
+
         document.addEventListener('pointermove', (e) => {
-            if(!isUserInteracting) return;
-            lon = (onPointerDownPointerX - e.clientX) * 0.15 + onPointerDownLon;
-            lat = (e.clientY - onPointerDownPointerY) * 0.15 + onPointerDownLat;
+            if (!isUserInteracting) return;
+            lon = (onPointerDownPointerX - e.clientX) * 0.1 + onPointerDownLon;
+            lat = (e.clientY - onPointerDownPointerY) * 0.1 + onPointerDownLat;
         });
+
         document.addEventListener('pointerup', () => isUserInteracting = false);
 
-        // --- 4. ACCELEROMETER "JOYSTICK" ---
-        const btn = document.getElementById('ctrlBtn');
-        const cubeVis = document.getElementById('cube');
-        
-        let isHolding = false;
-        let calibX = 0, calibY = 0; // The "Zero" point
-        let currX = 0, currY = 0;   // Current filtered sensor data
 
-        // Permission & Start
-        const startSensor = async () => {
-            if(isHolding) return;
+        // --- 5. SENSOR LOGIC (TOGGLE) ---
+        const toggleBtn = document.getElementById('toggleBtn');
+        const cubeVis = document.getElementById('cubeVis');
+
+        toggleBtn.addEventListener('click', async () => {
             
-            // iOS Permission Check
-            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+            // Check iOS Permissions on first click
+            if (!isSensorActive && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
                 try {
-                    const resp = await DeviceMotionEvent.requestPermission();
-                    if (resp !== 'granted') { alert("Permission Denied"); return; }
-                } catch(e) {}
+                    const response = await DeviceMotionEvent.requestPermission();
+                    if (response !== 'granted') {
+                        statusEl.innerText = "PERMISSION DENIED";
+                        return;
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
             }
 
-            isHolding = true;
-            btn.classList.add('active');
-            statusEl.innerText = "SENSORS ACTIVE: Tilt to Rotate";
-            
-            // Listen
-            window.addEventListener('devicemotion', handleMotion, true);
-            
-            // CALIBRATE: Set current position as 0 immediately
-            calibX = null; 
-        };
+            // TOGGLE STATE
+            isSensorActive = !isSensorActive;
 
-        const stopSensor = () => {
-            isHolding = false;
-            btn.classList.remove('active');
-            statusEl.innerHTML = "Drag screen to look • <b>HOLD CUBE</b> to tilt-control";
-            window.removeEventListener('devicemotion', handleMotion, true);
-            
-            // Reset Cube Visual
-            cubeVis.style.transform = '';
-        };
+            if (isSensorActive) {
+                // ACTIVATED
+                toggleBtn.classList.add('active-state');
+                statusEl.innerHTML = "SENSOR ON <br> <span style='font-size:10px'>Hold steady to calibrate...</span>";
+                
+                // Reset calibration triggers
+                calibX = null; 
+                
+                window.addEventListener('devicemotion', handleMotion, true);
 
-        btn.addEventListener('pointerdown', startSensor);
-        btn.addEventListener('pointerup', stopSensor);
-        btn.addEventListener('pointerleave', stopSensor);
+            } else {
+                // DEACTIVATED
+                toggleBtn.classList.remove('active-state');
+                statusEl.innerText = "SENSOR OFF (Tap Cube)";
+                
+                window.removeEventListener('devicemotion', handleMotion, true);
+                
+                // Reset Cube Visual
+                cubeVis.style.transform = '';
+            }
+        });
 
         function handleMotion(event) {
             const acc = event.accelerationIncludingGravity;
-            if(!acc) return;
+            if (!acc) return;
 
-            // Low Pass Filter (Smooth the jitter)
-            // 0.2 means "Update by 20% of new value"
-            const alpha = 0.2; 
-            
-            // Note: Orientation logic varies by device. 
-            // Standard Portrait: X=Left/Right, Y=Up/Down, Z=Face
-            
-            // Init Calibration if first frame
+            // Low Pass Filter (Smooths out jitter)
+            const alpha = 0.15;
+
+            // Capture initial state as "Zero" if newly activated
             if (calibX === null) {
-                currX = acc.x; 
-                currY = acc.y;
-                calibX = currX;
-                calibY = currY;
+                calibX = acc.x;
+                calibY = acc.y;
+                currentX = acc.x;
+                currentY = acc.y;
+                statusEl.innerText = "SENSOR ACTIVE - TILT TO MOVE";
                 return;
             }
 
-            // Smooth updates
-            currX += alpha * (acc.x - currX);
-            currY += alpha * (acc.y - currY);
+            // Apply smoothing
+            currentX += alpha * (acc.x - currentX);
+            currentY += alpha * (acc.y - currentY);
 
-            // --- CALCULATE DELTA (How far are we tilting from start?) ---
-            const deltaX = currX - calibX; // Left/Right tilt
-            const deltaY = currY - calibY; // Up/Down tilt
+            // Calculate Difference from Calibration Point
+            const deltaX = currentX - calibX; // Left/Right Tilt
+            const deltaY = currentY - calibY; // Up/Down Tilt
 
-            // --- VISUALIZE ON CUBE ---
-            // Simply map the delta to rotation
-            cubeVis.style.transform = `rotateX(${-deltaY * 10}deg) rotateY(${deltaX * 10}deg)`;
+            // VISUALIZE ON CUBE
+            cubeVis.style.transform = `rotateX(${-deltaY * 15}deg) rotateY(${deltaX * 15}deg)`;
 
-            // --- APPLY TO CAMERA (Velocity) ---
-            const deadzone = 0.3; // Small movements do nothing
-            const speed = 1.0;
+            // APPLY TO CAMERA
+            const deadzone = 0.5; // Minimum tilt required to move
+            const speed = 1.2;
 
-            // Yaw (Left/Right) - X axis gravity
-            if(Math.abs(deltaX) > deadzone) {
+            // Yaw (Left/Right)
+            if (Math.abs(deltaX) > deadzone) {
                 lon += deltaX * speed;
             }
 
-            // Pitch (Up/Down) - Y axis gravity
-            if(Math.abs(deltaY) > deadzone) {
-                // Invert Y typically feels more natural (Tilt back to look up)
+            // Pitch (Up/Down)
+            // LOGIC: "When device moves UP, move grid DOWN"
+            // If I tilt device UP (Top Back), deltaY usually changes.
+            // Standard Camera: Look UP -> Lat INCREASES -> Grid moves DOWN visually.
+            // We subtract deltaY (depending on device orientation standard, Y is usually negative when upright).
+            // We will use standard flight control: Pull Back (Tilt Up) -> Look Up.
+            
+            if (Math.abs(deltaY) > deadzone) {
+                // 'lat' controls Looking Up/Down.
+                // Subtracting deltaY usually maps Tilt Back -> Look Up
                 lat -= deltaY * speed; 
             }
         }
 
-        // --- 5. RENDER LOOP ---
+        // --- 6. RENDER LOOP ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // Lat clamping? No, user wants full 360.
-            // Just prevent math errors at poles
-            // lat = Math.max(-85, Math.min(85, lat)); 
-
+            // Calculate 3D Point
+            lat = Math.max(-85, Math.min(85, lat)); // Prevent full flip
             phi = THREE.MathUtils.degToRad(90 - lat);
             theta = THREE.MathUtils.degToRad(lon);
 
@@ -340,9 +340,16 @@
             const z = 500 * Math.sin(phi) * Math.sin(theta);
 
             camera.lookAt(x, y, z);
+
+            // Rotate grid slightly for effect
+            if (!isSensorActive && !isUserInteracting) {
+                lon += 0.05; // Auto rotate very slowly if idle
+            }
+
             renderer.render(scene, camera);
         }
 
+        // Resize Handler
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -350,6 +357,7 @@
         });
 
         animate();
+
     </script>
 </body>
 </html>
